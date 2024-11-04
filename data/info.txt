@@ -1,0 +1,15 @@
+Parameters for tests:
+* cheap objective focussed directly onto camera sensor
+* camera is sc0715 global shutter raspberry pi camera
+* NA = 0.1, system magnification = 4, focal length = 160mm
+* image pixel size = 862.5nm (3.45um sensor pixel)
+* LED to sample: 54mm
+* sample to objective: 24mm
+* objective to sensor: 160mm
+* images taken in spiral sequence, take first n^2 images for an nxn reconstruction
+* both usaf target data sets are for the positive target
+
+Specific data information:
+* talia: 40ms exposure, 500x500, minimal ambient light
+* usaf_dark, 50ms exposure, 380x380, minimal ambient light
+* usaf_light, 20ms exposure, 380x380, exposed to ambient light
