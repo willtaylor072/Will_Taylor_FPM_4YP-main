@@ -136,8 +136,8 @@ def reconstruct(images, kx, ky, obj, pupil, options):
             
             ## Define variables for object and pupil updating 
               
-            # The relevant part of object spectrum to update, multiplied by the pupil          
-            object_update = np.multiply(obj[y_start:y_start+img_size, x_start:x_start+img_size], pupil) 
+            # The relevant part of object spectrum to update         
+            object_update = obj[y_start:y_start+img_size, x_start:x_start+img_size] 
              
             # Measured image amplitude
             img = np.sqrt(images[:,:,i])
