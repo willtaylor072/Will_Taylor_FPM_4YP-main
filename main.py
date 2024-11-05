@@ -136,7 +136,7 @@ def reconstruct(images, kx, ky, obj, pupil, options):
             
             ## Define variables for object and pupil updating 
               
-            # The relevant part of object spectrum to update         
+            # The relevant part of object spectrum to update (not multiplied by pupil!)        
             object_update = obj[y_start:y_start+img_size, x_start:x_start+img_size] 
              
             # Measured image amplitude
