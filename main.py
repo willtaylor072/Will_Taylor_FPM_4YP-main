@@ -96,8 +96,8 @@ def FT(x):
 def IFT(x):
     return np.fft.fftshift(ifft2(np.fft.ifftshift(x)))
 
-# Reconstruct object and pupil function using Quasi Newton algorithm
-def FPM_Quasi_Newton(images, kx, ky, obj, pupil, options):
+# Reconstruct object and pupil function from set of low quality images using Fourier Ptychography
+def reconstruct(images, kx, ky, obj, pupil, options):
     # Inputs: 
     # images; low res image array data, in order taken
     # kx,ky; location of LEDs in Fourier domain, in order of images taken
@@ -147,13 +147,13 @@ def FPM_Quasi_Newton(images, kx, ky, obj, pupil, options):
             
             # The update image is composed of the magnitude of the measured image, the phase of the estimated image
             # and also the spectrum of the estimated image is subtracted
-            update_image = FT(np.multiply(img, np.exp(1j*np.angle(img_est))) - img_est)
+            update_image = FT(np.multiply(img, np.exp(1j*np.angle(img_est)))- img_est)
             
             # Object update
             numerator = np.abs(pupil) * np.conj(pupil) * update_image
             denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
             object_update = (numerator / denominator)
-            obj[y_start:y_start+img_size, x_start:x_start+img_size] += 0.5*object_update # Add to main spectrum
+            obj[y_start:y_start+img_size, x_start:x_start+img_size] += object_update # Add to main spectrum
 
             # Pupil update
             numerator = np.abs(object_update) * np.conj(object_update) * update_image * pupil_binary
@@ -198,7 +198,7 @@ def FPM_Quasi_Newton(images, kx, ky, obj, pupil, options):
 
 
 
-## Main FPM reconstruction. Set up for square, grayscale images. 
+## Main FPM reconstruction. Set up for square, grayscale images
 
 # Load image data into an array
 data_path = 'data/usaf_dark'
@@ -262,5 +262,5 @@ options = {
     'plotting': True, # Enable plotting
 }
 
-rec_obj, rec_pupil = FPM_Quasi_Newton(images, kx, ky, obj, pupil, options)
+rec_obj, rec_pupil = reconstruct(images, kx, ky, obj, pupil, options)
 
