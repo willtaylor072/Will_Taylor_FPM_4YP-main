@@ -1,15 +1,22 @@
-Parameters for tests:
+Parameters for old tests:
 * cheap objective focussed directly onto camera sensor
 * camera is sc0715 global shutter raspberry pi camera
-* NA = 0.1, system magnification = 4, focal length = 160mm
-* image pixel size = 862.5nm (3.45um sensor pixel)
+* NA = 0.1, system magnification = 4 for tube length = 160mm
+* pixel size on object plane = 862.5nm (3.45um sensor pixel / 4x magnification)
 * LED to sample: 54mm
 * sample to objective: 24mm
 * objective to sensor: 160mm
 * images taken in spiral sequence, take first n^2 images for an nxn reconstruction
 * both usaf target data sets are for the positive target
 
+After the 3D printed version is built the following has changed:
+* since the tube length is now only 120mm (fixed by length of metal bars)
+the magnification is not the same. By measuring pixel size with known USAF geometry,
+each pixel on the object plane is about 1.1um (so magnification is 3.14 - lower than before)
+* everything else is the same
+
 Specific data information:
-* talia: 40ms exposure, 500x500, minimal ambient light
-* usaf_dark, 50ms exposure, 380x380, minimal ambient light
-* usaf_light, 20ms exposure, 380x380, exposed to ambient light
+* talia_old: 40ms exposure, 500x500
+* usaf_old, 50ms exposure, 380x380
+
+* usaf_new, 50ms exposure, 300x300
