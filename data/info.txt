@@ -21,3 +21,5 @@ Specific data information:
 
 * usaf_new, 50ms exposure, 300x300
 * usaf_new_2, 300ms exposure, 300x300
+
+(note exposure for brightfield image is not always the same)
