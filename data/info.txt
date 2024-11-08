@@ -20,3 +20,4 @@ Specific data information:
 * usaf_old, 50ms exposure, 380x380
 
 * usaf_new, 50ms exposure, 300x300
+* usaf_new_2, 300ms exposure, 300x300
