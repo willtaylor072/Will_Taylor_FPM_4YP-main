@@ -16,10 +16,5 @@ each pixel on the object plane is about 1.1um (so magnification is 3.14 - lower 
 * everything else is the same
 
 Specific data information:
-* talia_old: 40ms exposure, 500x500
-* usaf_old, 50ms exposure, 380x380
+* usaf_new, 300ms exposure, 300x300
 
-* usaf_new, 50ms exposure, 300x300
-* usaf_new_2, 300ms exposure, 300x300
-
-(note exposure for brightfield image is not always the same)
