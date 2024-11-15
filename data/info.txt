@@ -16,5 +16,5 @@ each pixel on the object plane is about 1.1um (so magnification is 3.14 - lower 
 * everything else is the same
 
 Specific data information:
-* usaf_new, 300ms exposure, 300x300
+* usaf_1, usaf_2, 300ms exposure, 300x300
 
