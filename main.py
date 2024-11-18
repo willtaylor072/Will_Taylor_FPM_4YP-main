@@ -3,6 +3,7 @@ import matplotlib.patches as patches
 from matplotlib.animation import FuncAnimation
 import os
 from PIL import Image
+import cv2
 import numpy as np
 from scipy.fft import fft2, ifft2
 import time
@@ -323,6 +324,13 @@ line.set_value(0)  # 0 for LOW, 1 for HIGH
 # Release the line when done
 line.release()
 
+# Clean up camera and LED array (in case they were left running)
+led_matrix = RPiLedMatrix()
+led_matrix.off()
+camera = Picamera2()
+camera.stop()
+camera.close()
+
 #######################################################################################################################
 # Image gathering
 
@@ -332,6 +340,8 @@ num_images = grid_size**2 # Total number of FPM images
 brightfield_exposure = 50000  # In microseconds for brightfield
 fpm_exposure = 300000  # In microseconds for FPM
 img_size = 300 # 100-300 is sensible for square images (otherwise reconstruction will be too slow)
+crop_start_x = 100 # Do not need to change these crop starts
+crop_start_y = 100
 x_coords,y_coords = LED_spiral(grid_size) # Generates arrays for x and y to turn on LEDs in spiral pattern
 
 # Initialise LED array
@@ -341,37 +351,43 @@ led_matrix.set_rotation(135) # Ensure 0,0 is bottom left pixel
 # Initialize camera
 camera = Picamera2()
 still_config = camera.create_still_configuration(
-    main={'size': (img_size, img_size)}, controls={"AnalogueGain": 1}
+    main={'size': (1456,1088)}, controls={"AnalogueGain": 1} # Need to use whole region then crop (otherwise we lose resolution)
 )
 camera.configure(still_config)
-
-# Show preview for alignment
-camera.start_preview()
 camera.start()
-print("Align your sample. Press Enter when ready.")
-input()  # Wait for user input to proceed
-camera.stop_preview()
+
+# Preview alignment using OpenCV
+print("Align your sample. Press 'q' to exit preview and continue.")
+led_matrix.show_circle(radius=2, color='white') # Turn on brightfield LEDs
+while True:
+    frame = camera.capture_array()[crop_start_x:crop_start_x+img_size,crop_start_y:crop_start_y+img_size] # Show the region of interest
+    cv2.imshow("Camera Preview", frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to quit preview
+        break
+cv2.destroyAllWindows()
 
 # Take a brightfield image
 camera.set_controls({"ExposureTime": brightfield_exposure})
-led_matrix.show_circle(radius=2, color='white', brightness=1)
 time.sleep(1)  # Allow LED to stabilize
-brightfield = camera.capture_array() # img_size x img_size RGB image
+brightfield = camera.capture_array()[crop_start_x:crop_start_x+img_size,crop_start_y:crop_start_y+img_size] # img_size x img_size RGB image
 brightfield = np.array(Image.fromarray(brightfield).convert('L')) # Convert to grayscale 
 
 # Take FPM images
-images = []  # List to store grayscale arrays
+images = np.zeros((img_size,img_size,num_images))  # np array to store grayscale arrays
 camera.set_controls({"ExposureTime": fpm_exposure})
 
 for i in range(num_images):
     led_matrix.show_pixel(x_coords[i], y_coords[i], brightness=1)
     time.sleep(0.1)  # Short pause for LED
-    image = camera.capture_array() # img_size x img_size RGB image
-    image = np.array(Image.fromarray(image).convert('L'))  # Convert to grayscale
-    images.append(image)
+    image = camera.capture_array()[crop_start_x:crop_start_x+img_size,crop_start_y:crop_start_y+img_size] # img_size x img_size RGB image
+    image = np.array(Image.fromarray(image).convert('L')) / 255 # Convert to grayscale and convert range to 0-1
+    images[:,:,i] = image # Insert into images array
     
 # # Optional: Save brightfield and FPM images to output folder for debugging
 # output_folder = 'data/recent_data'
+# # Ensure output folder exists
+# if not os.path.exists(output_folder):
+#     os.makedirs(output_folder)
 # np.save(os.path.join(output_folder, 'brightfield.npy'), brightfield)
 # np.save(os.path.join(output_folder, 'fpm_images.npy'), np.array(images))
 
@@ -423,7 +439,7 @@ options = {
     'max_iter': 8, # Number of iterations
     'alpha': 6, # Regularisation parameter, <10, DOES make a difference, 5 seems good for most cases
     'beta': 1, # Regularisation parameter, >0, not important
-    'plot_mode': 2, # 0, off; 1, plot every image; 2, plot every iteration
+    'plot_mode': 0, # 0, off; 1, plot every image; 2, plot every iteration
     'quality_threshold': 0, # Will only use images with dynamic range greater than this (set to 0 to use all images)
     'moderator_on': False, # Will reduce impact on object update from low information images (helps stability)
     'LED_correction': 0, # 0, off; 1, accurate; 2, fast (not working)
