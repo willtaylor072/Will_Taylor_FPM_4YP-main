@@ -1,3 +1,4 @@
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.animation import FuncAnimation
@@ -11,6 +12,11 @@ from RPiCameraApp import RPiCameraApp
 from RPiLedMatrix import RPiLedMatrix
 from picamera2 import Picamera2
 import gpiod
+import warnings
+
+# Setup 
+warnings.filterwarnings("ignore", message=".*iCCP: known incorrect sRGB profile.*") # Filter harmless warning
+matplotlib.use('Qt5Agg') # Select backend for plotting
 
 ##################################################################################################################
 # Functions
@@ -182,8 +188,8 @@ def plot(axes,fig, obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,pl
     
     # Update the figure
     plt.tight_layout()  # Optional: adjusts subplot params for a nicer layout
-    plt.draw()         # Redraw the current figure
-    plt.pause(0.1)     # Pause to allow the figure to update
+    plt.draw()          # Redraw the current figure
+    plt.pause(0.1)      # Pause to allow the figure to update
 
 # Reconstruct object and pupil function using Quasi Newton algorithm
 def reconstruct(images, kx, ky, obj, pupil, options):
@@ -232,7 +238,7 @@ def reconstruct(images, kx, ky, obj, pupil, options):
             kx_new.append(kx[i])      # Append the corresponding kx coordinate
             ky_new.append(ky[i])      # Append the corresponding ky coordinate
             
-    # Convert lists to numpy arrays and override the old variables to save memory
+    # Convert lists to numpy arrays and override the old variables
     images = np.array(good_images)  # Shape will be (num_good_images, img_size, img_size)
     images = np.transpose(good_images, (1, 2, 0)) # Shape will be (img_size, img_size, num_good_images) as required
     num_images = images.shape[2]
@@ -246,6 +252,7 @@ def reconstruct(images, kx, ky, obj, pupil, options):
     if plot_mode != 0:
         global pupil_radius 
         fig, axes = plt.subplots(1, 3, figsize=(15,4))
+        plt.ion() # If interactive mode is on figures are shown on creation
 
     # Main loop
     for iter in range(max_iter):
@@ -340,9 +347,10 @@ num_images = grid_size**2 # Total number of FPM images
 brightfield_exposure = 50000  # In microseconds for brightfield
 fpm_exposure = 300000  # In microseconds for FPM
 img_size = 300 # 100-300 is sensible for square images (otherwise reconstruction will be too slow)
-crop_start_x = 100 # Do not need to change these crop starts
-crop_start_y = 100
+crop_start_x = int(1088/2 - img_size/2) # These crop values ensure images are in center of camera FOV
+crop_start_y = int(1456/2 - img_size/2)
 x_coords,y_coords = LED_spiral(grid_size) # Generates arrays for x and y to turn on LEDs in spiral pattern
+output_folder = 'data/recent' # For saving images (as png)
 
 # Initialise LED array
 led_matrix = RPiLedMatrix()
@@ -356,20 +364,69 @@ still_config = camera.create_still_configuration(
 camera.configure(still_config)
 camera.start()
 
-# Preview alignment using OpenCV
-print("Align your sample. Press 'q' to exit preview and continue.")
-led_matrix.show_circle(radius=2, color='white') # Turn on brightfield LEDs
-while True:
-    frame = camera.capture_array()[crop_start_x:crop_start_x+img_size,crop_start_y:crop_start_y+img_size] # Show the region of interest
-    cv2.imshow("Camera Preview", frame)
-    if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to quit preview
-        break
-cv2.destroyAllWindows()
+# Preview alignment using matplotlib
+print("Align your sample. Press 'q' to quit preview or close the window to exit.")
+led_matrix.show_circle(radius=2, color='white')  # Turn on brightfield LEDs
+quit_preview = False
+plot_closed = False
+
+def on_key(event):
+    global quit_preview
+    if event.key == 'q':  # Check if the 'q' key is pressed
+        quit_preview = True
+
+def on_close(event):
+    global plot_closed
+    plot_closed = True  # Set flag when the plot window is closed
+
+# Set up interactive mode
+plt.ion()
+fig, axes = plt.subplots(1, 2, figsize=(10, 5))  # Figure size (10x5)
+
+# Adjust layout and axis sizes
+fig.subplots_adjust(left=0.05, right=0.95, bottom=0.1, top=0.9, wspace=0.3)
+axes[0].set_aspect(1456 / 1088)  # Aspect ratio for the full frame
+axes[1].set_aspect('equal')  # Aspect ratio for the cropped frame is square
+
+# Connect the events to their handlers
+fig.canvas.mpl_connect('key_press_event', on_key)
+fig.canvas.mpl_connect('close_event', on_close)
+
+# Initialize the plots
+full_frame_plot = axes[0].imshow([[0]])  # Placeholder for full frame
+cropped_frame_plot = axes[1].imshow([[0]])  # Placeholder for cropped frame
+# Add a static red rectangle to indicate the cropped region
+rectangle = patches.Rectangle((crop_start_x, crop_start_y),img_size, img_size, linewidth=2, edgecolor='red', facecolor='none')
+axes[0].add_patch(rectangle)  # Add rectangle to full frame view
+
+# Set plot titles
+axes[0].set_title("Full Camera FOV")
+axes[1].set_title("Cropped Camera Region")
+
+while not (quit_preview or plot_closed):
+    # Capture frames
+    frame = camera.capture_array()  # Entire region (useful for aligning sample)
+    cropped_frame = frame[crop_start_y:crop_start_y+img_size, crop_start_x:crop_start_x+img_size]  # Cropped region
+
+    # Update plot data without clearing
+    full_frame_plot.set_data(frame)
+    cropped_frame_plot.set_data(cropped_frame)
+
+    # Rescale axes to fit data
+    axes[0].autoscale()
+    axes[1].autoscale()
+
+    plt.pause(0.05)  # Short pause for smoother updates
+
+plt.close(fig)
+
+# End preview, start taking images
+############################
 
 # Take a brightfield image
 camera.set_controls({"ExposureTime": brightfield_exposure})
 time.sleep(1)  # Allow LED to stabilize
-brightfield = camera.capture_array()[crop_start_x:crop_start_x+img_size,crop_start_y:crop_start_y+img_size] # img_size x img_size RGB image
+brightfield = camera.capture_array()[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size] # img_size x img_size RGB image
 brightfield = np.array(Image.fromarray(brightfield).convert('L')) # Convert to grayscale 
 
 # Take FPM images
@@ -379,17 +436,13 @@ camera.set_controls({"ExposureTime": fpm_exposure})
 for i in range(num_images):
     led_matrix.show_pixel(x_coords[i], y_coords[i], brightness=1)
     time.sleep(0.1)  # Short pause for LED
-    image = camera.capture_array()[crop_start_x:crop_start_x+img_size,crop_start_y:crop_start_y+img_size] # img_size x img_size RGB image
-    image = np.array(Image.fromarray(image).convert('L')) / 255 # Convert to grayscale and convert range to 0-1
-    images[:,:,i] = image # Insert into images array
+    image = camera.capture_array()[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size] # img_size x img_size RGB image
+    image_pil = Image.fromarray(image).convert('L') # Grayscale pillow image
+    img_path = os.path.join(output_folder, f'image_{i}.png') # Create path name
+    image_pil.save(img_path, format='PNG') # Save as png 
     
-# # Optional: Save brightfield and FPM images to output folder for debugging
-# output_folder = 'data/recent_data'
-# # Ensure output folder exists
-# if not os.path.exists(output_folder):
-#     os.makedirs(output_folder)
-# np.save(os.path.join(output_folder, 'brightfield.npy'), brightfield)
-# np.save(os.path.join(output_folder, 'fpm_images.npy'), np.array(images))
+    image = np.array(image_pil) # Convert to array for reconstruction
+    images[:,:,i] = image # Insert into images array
 
 # Turn off LED matrix and camera             
 led_matrix.off()
@@ -483,7 +536,7 @@ axes[1].set_title('Object phase')
 axes[2].imshow(brightfield, cmap='gray')
 axes[2].set_title('Brightfield image')
 
-plt.show()
+plt.show() # If interactive mode is off we must call plt.show()
 
 # Save results
 obj_mag = (obj_mag / obj_mag.max() * 255).astype(np.uint8)
