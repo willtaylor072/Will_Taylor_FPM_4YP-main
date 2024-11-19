@@ -1,22 +1,17 @@
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from matplotlib.animation import FuncAnimation
 import os
 from PIL import Image
-import cv2
+import sys
 import numpy as np
 from scipy.fft import fft2, ifft2
 import time
-from RPiCameraApp import RPiCameraApp
 from RPiLedMatrix import RPiLedMatrix
 from picamera2 import Picamera2
 import gpiod
-import warnings
 
-# Setup 
-warnings.filterwarnings("ignore", message=".*iCCP: known incorrect sRGB profile.*") # Filter harmless warning
-matplotlib.use('Qt5Agg') # Select backend for plotting
+sys.stderr = open(os.devnull, 'w')
 
 ##################################################################################################################
 # Functions
@@ -111,7 +106,7 @@ def IFT(x):
 
 # Update kx and ky for the current image by finding the kx and ky that minimise error between image estimate
 # and current low res image. search_range should be odd
-def update_LED_positions_accurate(obj,img,kx,ky,img_size,obj_center,image_number,search_range=15):
+def update_LED_positions_accurate(obj,img,kx,ky,img_size,obj_center,image_number,search_range=10):
     
     # Easier to crop obj using x_start and y_start 
     x_start = int(obj_center + kx - img_size//2)
@@ -184,10 +179,9 @@ def plot(axes,fig, obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,pl
     # axes[2].set_title('Current pupil magnitude')
     axes[2].plot(update_size)
     axes[2].set_title('Object update size')
-    axes[2].set_ylim(0,0.5)
+    # axes[2].set_ylim(0,1)
     
     # Update the figure
-    plt.tight_layout()  # Optional: adjusts subplot params for a nicer layout
     plt.draw()          # Redraw the current figure
     plt.pause(0.1)      # Pause to allow the figure to update
 
@@ -221,32 +215,34 @@ def reconstruct(images, kx, ky, obj, pupil, options):
     obj_center = obj_size // 2 # Center of object (used for inserting spectra in correct place)
     pupil_binary = np.copy(pupil) # Original pupil function (binary mask)
     pupil = pupil.astype('complex64') # Pupil function for updating needs to be complex 
-
-    # Initialize empty lists to store good images and their coordinates
-    good_images = []
-    img_quality = []
-    kx_new = []
-    ky_new = []
-    
-    # Loop through each image and check if it meets the quality threshold
-    for i in range(num_images):
-        img = images[:, :, i] # Image to check
-        dynamic_range = (np.max(img) - np.min(img)) * 256
-        if dynamic_range >= quality_threshold:
-            good_images.append(img)   # Append the good image to the list
-            img_quality.append(dynamic_range) # Save the quality metric
-            kx_new.append(kx[i])      # Append the corresponding kx coordinate
-            ky_new.append(ky[i])      # Append the corresponding ky coordinate
-            
-    # Convert lists to numpy arrays and override the old variables
-    images = np.array(good_images)  # Shape will be (num_good_images, img_size, img_size)
-    images = np.transpose(good_images, (1, 2, 0)) # Shape will be (img_size, img_size, num_good_images) as required
-    num_images = images.shape[2]
-    img_quality = np.array(img_quality)
-    kx = np.array(kx_new)
-    ky = np.array(ky_new)
-        
     update_size = np.zeros(num_images) # To monitor object update size (can spot instability numerically)
+
+    # For removing low quality images
+    if quality_threshold != 0:
+        # Initialize empty lists to store good images and their coordinates
+        good_images = []
+        img_quality = []
+        kx_new = []
+        ky_new = []
+        
+        # Loop through each image and check if it meets the quality threshold
+        for i in range(num_images):
+            img = images[:, :, i] # Image to check
+            dynamic_range = (np.max(img) - np.min(img)) * 256
+            if dynamic_range >= quality_threshold:
+                good_images.append(img)   # Append the good image to the list
+                img_quality.append(dynamic_range) # Save the quality metric
+                kx_new.append(kx[i])      # Append the corresponding kx coordinate
+                ky_new.append(ky[i])      # Append the corresponding ky coordinate
+                
+        # Convert lists to numpy arrays and override the old variables
+        images = np.array(good_images)  # Shape will be (num_good_images, img_size, img_size)
+        images = np.transpose(good_images, (1, 2, 0)) # Shape will be (img_size, img_size, num_good_images) as required
+        num_images = images.shape[2]
+        img_quality = np.array(img_quality)
+        kx = np.array(kx_new)
+        ky = np.array(ky_new)
+        update_size = np.zeros(num_images) # To monitor object update size (can spot instability numerically)
      
     # If plotting, create axis and figure here to save resources
     if plot_mode != 0:
@@ -298,13 +294,21 @@ def reconstruct(images, kx, ky, obj, pupil, options):
                 kx[i] = kx_new # Updated LED positions
                 ky[i] = ky_new
                 
+                
             # Plot every image
             if plot_mode == 1:
                 plot(axes,fig, obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size)
+                
+        # Status message
+        progress = int((iter+1)/max_iter * 100)
+        sys.stdout.write(f'\r Reconstruction Progress: {progress}%') # Write to same line
+        sys.stdout.flush()
         
         # Plot every iteration
         if plot_mode == 2:
             plot(axes,fig, obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size)
+    
+    print("\n Reconstruction Done!") # Move to new line in terminal
     
     # To keep plot open when function is done
     if plot_mode != 0:
@@ -339,18 +343,20 @@ camera.stop()
 camera.close()
 
 #######################################################################################################################
-# Image gathering
+# Image preview and gatehering
+
+data_folder = 'data/recent' # For saving data images (diagnostics only)
+results_folder = 'results/recent' # For saving results
 
 # Set up image gathering stage
-grid_size = 5 # 1->16, recommend 4-8 for stability, time and performance balacnce
+grid_size = 4 # 1->16, recommend 4-8 for stability, time and performance balacnce
 num_images = grid_size**2 # Total number of FPM images
 brightfield_exposure = 50000  # In microseconds for brightfield
-fpm_exposure = 300000  # In microseconds for FPM
+fpm_exposure = 400000  # In microseconds for FPM
 img_size = 300 # 100-300 is sensible for square images (otherwise reconstruction will be too slow)
-crop_start_x = int(1088/2 - img_size/2) # These crop values ensure images are in center of camera FOV
-crop_start_y = int(1456/2 - img_size/2)
+crop_start_x = int(1456/2 - img_size/2) # These crop values ensure images are in center of camera FOV
+crop_start_y = int(1088/2 - img_size/2)
 x_coords,y_coords = LED_spiral(grid_size) # Generates arrays for x and y to turn on LEDs in spiral pattern
-output_folder = 'data/recent' # For saving images (as png)
 
 # Initialise LED array
 led_matrix = RPiLedMatrix()
@@ -359,22 +365,33 @@ led_matrix.set_rotation(135) # Ensure 0,0 is bottom left pixel
 # Initialize camera
 camera = Picamera2()
 still_config = camera.create_still_configuration(
-    main={'size': (1456,1088)}, controls={"AnalogueGain": 1} # Need to use whole region then crop (otherwise we lose resolution)
+    main={'size': (1456,1088)}, controls={"AnalogueGain": 1, 'ExposureTime': 30000} # Need to use whole region then crop (otherwise we lose resolution)
 )
 camera.configure(still_config)
 camera.start()
 
 # Preview alignment using matplotlib
-print("Align your sample. Press 'q' to quit preview or close the window to exit.")
-led_matrix.show_circle(radius=2, color='white')  # Turn on brightfield LEDs
+print("Align your sample mechanically or move region with key arrows. Press ENTER when ready.")
+led_matrix.show_circle(radius=2, color='white', brightness=1)  # Turn on brightfield LEDs
 quit_preview = False
 plot_closed = False
 
+# Handles quit by 'enter' and arrow key crop adjustments
 def on_key(event):
-    global quit_preview
-    if event.key == 'q':  # Check if the 'q' key is pressed
-        quit_preview = True
-
+    global quit_preview, crop_start_x, crop_start_y
+    match event.key:
+        case 'enter': 
+            quit_preview = True
+        case 'up': 
+            crop_start_y -= 1
+        case 'down': 
+            crop_start_y += 1
+        case 'left': 
+            crop_start_x -= 1
+        case 'right':
+            crop_start_x += 1
+    
+# Handles closing figure (by clicking the x)
 def on_close(event):
     global plot_closed
     plot_closed = True  # Set flag when the plot window is closed
@@ -392,17 +409,19 @@ axes[1].set_aspect('equal')  # Aspect ratio for the cropped frame is square
 fig.canvas.mpl_connect('key_press_event', on_key)
 fig.canvas.mpl_connect('close_event', on_close)
 
+# Placeholder arrays for initialization (makes plotting faster)
+placeholder_frame = np.zeros((1088, 1456), dtype=np.uint8)  # Full frame size
+placeholder_cropped = np.zeros((img_size, img_size), dtype=np.uint8)  # Cropped size
+
 # Initialize the plots
-full_frame_plot = axes[0].imshow([[0]])  # Placeholder for full frame
-cropped_frame_plot = axes[1].imshow([[0]])  # Placeholder for cropped frame
-# Add a static red rectangle to indicate the cropped region
-rectangle = patches.Rectangle((crop_start_x, crop_start_y),img_size, img_size, linewidth=2, edgecolor='red', facecolor='none')
-axes[0].add_patch(rectangle)  # Add rectangle to full frame view
+full_frame_plot = axes[0].imshow(placeholder_frame, vmin=0, vmax=255)  # Full frame plot
+cropped_frame_plot = axes[1].imshow(placeholder_cropped, vmin=0, vmax=255)  # Cropped frame plot
 
 # Set plot titles
 axes[0].set_title("Full Camera FOV")
 axes[1].set_title("Cropped Camera Region")
 
+# Main preview loop
 while not (quit_preview or plot_closed):
     # Capture frames
     frame = camera.capture_array()  # Entire region (useful for aligning sample)
@@ -411,6 +430,12 @@ while not (quit_preview or plot_closed):
     # Update plot data without clearing
     full_frame_plot.set_data(frame)
     cropped_frame_plot.set_data(cropped_frame)
+    
+    # Add rectangle to show crop region
+    for patch in list(axes[0].patches): # Clear all patches before adding a new one
+        patch.remove()  # Remove each patch from the axis
+    rectangle = patches.Rectangle((crop_start_x, crop_start_y),img_size, img_size, linewidth=2, edgecolor='red', facecolor='none')
+    axes[0].add_patch(rectangle)  # Add rectangle to full frame view
 
     # Rescale axes to fit data
     axes[0].autoscale()
@@ -418,16 +443,17 @@ while not (quit_preview or plot_closed):
 
     plt.pause(0.05)  # Short pause for smoother updates
 
-plt.close(fig)
+plt.ioff() # Turn off interactive mode but leave figure open while waiting
 
+#########################################################################################################
 # End preview, start taking images
-############################
 
-# Take a brightfield image
+# Take a brightfield image (already have brightfield LEDs on)
 camera.set_controls({"ExposureTime": brightfield_exposure})
-time.sleep(1)  # Allow LED to stabilize
 brightfield = camera.capture_array()[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size] # img_size x img_size RGB image
-brightfield = np.array(Image.fromarray(brightfield).convert('L')) # Convert to grayscale 
+brightfield_pil = Image.fromarray(brightfield).convert('L') # Grayscale pillow image
+brightfield_pil.save(os.path.join(data_folder,'brightfield.png'), format='PNG') # Save as png
+brightfield = np.array(brightfield_pil) # Keep as array
 
 # Take FPM images
 images = np.zeros((img_size,img_size,num_images))  # np array to store grayscale arrays
@@ -435,14 +461,21 @@ camera.set_controls({"ExposureTime": fpm_exposure})
 
 for i in range(num_images):
     led_matrix.show_pixel(x_coords[i], y_coords[i], brightness=1)
-    time.sleep(0.1)  # Short pause for LED
+    time.sleep(0.2)  # Short pause for LED
     image = camera.capture_array()[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size] # img_size x img_size RGB image
     image_pil = Image.fromarray(image).convert('L') # Grayscale pillow image
-    img_path = os.path.join(output_folder, f'image_{i}.png') # Create path name
+    img_path = os.path.join(data_folder, f'image_{i}.png') # Create path name
     image_pil.save(img_path, format='PNG') # Save as png 
     
     image = np.array(image_pil) # Convert to array for reconstruction
     images[:,:,i] = image # Insert into images array
+    
+    # Status message
+    progress = int((i+1)/num_images * 100)
+    sys.stdout.write(f'\r Image Gathering Progress: {progress}%') # Write to same line
+    sys.stdout.flush()
+
+print('\n Image Gathering Done!')
 
 # Turn off LED matrix and camera             
 led_matrix.off()
@@ -457,7 +490,7 @@ LED2SAMPLE = 54 # Distance from LED array to the sample, 54mm (larger distance l
 LED_P = 3.3 # LED pitch, mm
 N_GLASS = 1.52 # Glass refractive index
 NA = 0.1 # Objective numerical apature
-PIX_SIZE = 0.860e-6 # Pixel size on object plane, m, 1.09um for 3D printed microscope (directly measured), 862.5nm for old data
+PIX_SIZE = 1.09e-6 # Pixel size on object plane, m, 1.09um for 3D printed microscope (directly measured with USAF slide)
 WLENGTH = 550e-9 # Central wavelength of LED light, m
 
 # Derived variables
@@ -469,6 +502,7 @@ y_abs = (y_coords - y_coords[0])*LED_P # y distances of LEDs from center LED
 # Size of object image (for given parameters upsampling is between 2 and 5 depending on grid_size)
 # Can do seperately x and y if image is not square
 obj_size = calculate_object_size(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, PIX_SIZE)
+print(f'Upsampling ratio: {obj_size/img_size}; Reconstructed Pixel Size: {int(1e9*PIX_SIZE/(obj_size/img_size))}nm')
 
 # Initial pupil function (binary mask)
 # Nyquist sampling criterion: sampling_ratio >2 -> oversampling, sampling_ratio <2 -> undersampling (aliasing may occur)
@@ -481,7 +515,6 @@ pupil = r<1 # Binary mask for frequencies below cutoff frequency (higher frequen
 
 # Initial object estimate (using first image)
 img = np.sqrt(images[:,:,0]) # Amplitude of central image
-# img = np.sqrt(brightfield) # Could alternatively use brightfield if we have it
 F_img = FT(img) # Fourier transformed image (with shift)
 F_img = F_img * pupil # Apply pupil function
 pad_width = int((obj_size - img_size) / 2) # Padding to make correct size
@@ -517,17 +550,20 @@ rec_obj,rec_pupil,_,_ = reconstruct(images, kx, ky, obj, pupil, options)
 # np.save(os.path.join(data_path,'kx_updated'),kx_updated)
 # np.save(os.path.join(data_path,'ky_updated'),ky_updated)
 
-
 # # Reconstruction with loaded / optimal kx and ky (optimal values depend on crop size)
 # kx = np.load(os.path.join(data_path,'kx_updated.npy'))
 # ky = np.load(os.path.join(data_path,'ky_updated.npy'))
 # rec_obj,rec_pupil,_,_ = reconstruct(images, kx, ky, obj, pupil, options)
 
 # Plot results
-fig, axes = plt.subplots(1, 3, figsize=(15,4))
+fig, axes = plt.subplots(1, 3, figsize=(15,3))
 
-obj_mag = np.abs(rec_obj)**2 # Magnitude - can increase contrast if necessary
+contrast = 3 # Contrast for magnitude plot
+
+obj_mag = np.abs(rec_obj)**contrast # Magnitude 
+obj_mag = obj_mag / np.max(np.abs(obj_mag)) # Normalise
 obj_arg = np.angle(rec_obj) # Phase
+obj_arg = obj_arg / np.max(np.abs(obj_arg)) # Normalise
 
 axes[0].imshow(obj_mag,cmap='gray')
 axes[0].set_title('Object magnitude')
@@ -536,9 +572,16 @@ axes[1].set_title('Object phase')
 axes[2].imshow(brightfield, cmap='gray')
 axes[2].set_title('Brightfield image')
 
-plt.show() # If interactive mode is off we must call plt.show()
+plt.show()
 
 # Save results
-obj_mag = (obj_mag / obj_mag.max() * 255).astype(np.uint8)
+obj_mag = (obj_mag * 255).astype(np.uint8)
 obj_mag = Image.fromarray(obj_mag)
-obj_mag.save('results/magnitude.png')
+obj_mag.save('results/recent/magnitude.png')
+
+obj_arg = plt.cm.gray(obj_arg)  # Necessary for saving image
+obj_arg = (obj_arg * 255).astype(np.uint8)
+obj_arg = Image.fromarray(obj_arg)
+obj_arg.save('results/recent/phase.png',format='PNG')
+
+brightfield_pil.save(os.path.join(results_folder,'brightfield.png'), format='PNG') # Also save a copy to the results

@@ -6,8 +6,6 @@ Parameters for old tests:
 * LED to sample: 54mm
 * sample to objective: 24mm
 * objective to sensor: 160mm
-* images taken in spiral sequence, take first n^2 images for an nxn reconstruction
-* both usaf target data sets are for the positive target
 
 After the 3D printed version is built the following has changed:
 * since the tube length is now only 120mm (fixed by length of metal bars)
@@ -17,4 +15,5 @@ each pixel on the object plane is about 1.1um (so magnification is 3.14 - lower 
 
 Specific data information:
 * usaf_1, usaf_2, 300ms exposure, 300x300
+* zea_root, 400ms exposure, 300x300
 
