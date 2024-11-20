@@ -17,9 +17,10 @@ sys.stderr = open(os.devnull, 'w')
 # Functions
 ##################################################################################################################
 
-# Starting at 7,7, generate coordinates to turn on LEDs in a spiral pattern, moving right up left down right up left down....
-# 0,0 is bottom left LED when rotation is 135 degrees
-def LED_spiral(n):
+# Generate coordinates to turn on LEDs in a spiral pattern, moving right up left down right up left down....
+# 0,0 is bottom left LED when rotation is 135 degrees. Allow offsets to center the starting point with optical axis. 
+# N.b. If offsets are non zero, we can't use entire 16x16 LED array.
+def LED_spiral(n, x_offset=0, y_offset=0):
     # Input: n; gridsize to generate coordinates for
     # Returns: x_coords, y_coords; arrays for LED coordinates 
     
@@ -27,8 +28,8 @@ def LED_spiral(n):
     x_coords = np.zeros(n**2, dtype=int)
     y_coords = np.zeros(n**2, dtype=int)
     
-    # Starting point
-    x, y = 7, 7
+    # Starting point.
+    x, y = 7+x_offset, 7+y_offset
     x_coords[0], y_coords[0] = x, y
     
     step_size = 1  # How far to move in each direction before changing direction
@@ -289,7 +290,7 @@ def reconstruct(images, kx, ky, obj, pupil, options):
             pupil += pupil_update
       
             # LED position (kx,ky) correction for image we just used
-            if LED_correction == 1:
+            if LED_correction:
                 kx_new,ky_new = update_LED_positions_accurate(obj,img,kx[i],ky[i],img_size,obj_center,i)
                 kx[i] = kx_new # Updated LED positions
                 ky[i] = ky_new
@@ -351,12 +352,17 @@ results_folder = 'results/recent' # For saving results
 # Set up image gathering stage
 grid_size = 4 # 1->16, recommend 4-8 for stability, time and performance balacnce
 num_images = grid_size**2 # Total number of FPM images
+preview_exposure = 30000 # In microseconds for preview
 brightfield_exposure = 50000  # In microseconds for brightfield
 fpm_exposure = 400000  # In microseconds for FPM
-img_size = 300 # 100-300 is sensible for square images (otherwise reconstruction will be too slow)
+img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
 crop_start_x = int(1456/2 - img_size/2) # These crop values ensure images are in center of camera FOV
 crop_start_y = int(1088/2 - img_size/2)
-x_coords,y_coords = LED_spiral(grid_size) # Generates arrays for x and y to turn on LEDs in spiral pattern
+
+# Generate arrays for x and y to turn on LEDs in spiral pattern. Use offsets to ensure that the first LED
+# in the sequence is aligned with optical axis (center of brightfield zone). (Use code in gather_data.ipynb
+# to verify the data set is centralised)
+x_coords,y_coords = LED_spiral(grid_size, x_offset=0, y_offset=1) 
 
 # Initialise LED array
 led_matrix = RPiLedMatrix()
@@ -365,7 +371,7 @@ led_matrix.set_rotation(135) # Ensure 0,0 is bottom left pixel
 # Initialize camera
 camera = Picamera2()
 still_config = camera.create_still_configuration(
-    main={'size': (1456,1088)}, controls={"AnalogueGain": 1, 'ExposureTime': 30000} # Need to use whole region then crop (otherwise we lose resolution)
+    main={'size': (1456,1088)}, controls={"AnalogueGain": 1, 'ExposureTime': preview_exposure} # Need to use whole region then crop (otherwise we lose resolution)
 )
 camera.configure(still_config)
 camera.start()
@@ -528,7 +534,7 @@ options = {
     'plot_mode': 0, # 0, off; 1, plot every image; 2, plot every iteration
     'quality_threshold': 0, # Will only use images with dynamic range greater than this (set to 0 to use all images)
     'moderator_on': False, # Will reduce impact on object update from low information images (helps stability)
-    'LED_correction': 0, # 0, off; 1, accurate; 2, fast (not working)
+    'LED_correction': False, # Adjust kx and ky values to their optimal positions
 }
 
 # Reconstruction with calculated kx and ky (quickstart)
