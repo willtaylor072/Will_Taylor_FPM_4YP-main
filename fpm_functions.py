@@ -419,7 +419,7 @@ def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
         elif plot_mode == 3:
             plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size) # Plotting for notebook
     
-    print('\n Reconstruction Done') # Write to new line
+    print('\n Reconstruction Done!') # Write to new line
 
     return IFT(obj),pupil,kx,ky
 

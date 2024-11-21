@@ -25,7 +25,7 @@ grid_size = 5 # 1->16, recommend 4-8 for stability, time and performance balacnc
 img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
 preview_exposure = 30000 # In microseconds for preview
 brightfield_exposure = 50000  # In microseconds for brightfield
-fpm_exposure = 300000  # In microseconds for FPM
+fpm_exposure = 30000  # In microseconds for FPM
 
 # Set parameters for reconstruction algorithm
 options = {
