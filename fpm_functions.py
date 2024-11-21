@@ -1,21 +1,63 @@
 # Functions for FPM process
 
 import matplotlib.pyplot as plt
+from IPython.display import clear_output, display
 import matplotlib.patches as patches
-from matplotlib.animation import FuncAnimation
 import os
+import sys
 from PIL import Image
 import numpy as np
 from scipy.fft import fft2, ifft2
-import time
 import gpiod
+from RPiLedMatrix import RPiLedMatrix
+from picamera2 import Picamera2
 
+# Display images in a grid
+def display_data(grid_size,data_folder='data/recent'):
+
+    x,y = LED_spiral(grid_size,x_offset=0,y_offset=1) # get the coordinates of LEDs
+
+    fig, axes = plt.subplots(16, 16, figsize=(15,15))
+    fig.subplots_adjust(hspace=0.1, wspace=0.1)
+
+    for i in range(grid_size*grid_size):
+        image = Image.open(os.path.join(data_folder,f'image_{i}.png'))
+        row = -y[i] -1
+        col = x[i]
+        axes[row,col].imshow(image, cmap='gray')
+        axes[row,col].axis('off')
+        
+# Turn on fan
+def fan_on():
+    # Set the chip and line (pin number on the chip)
+    chip_name = "gpiochip4"
+    line_offset = 45  # This corresponds to GPIO pin 45
+
+    # Open the GPIO chip
+    chip = gpiod.Chip(chip_name)
+    line = chip.get_line(line_offset)
+
+    # Request the line as an output with a value of 0 (low)
+    line.request(consumer="my_gpio_control", type=gpiod.LINE_REQ_DIR_OUT)
+
+    # Set the GPIO pin
+    line.set_value(0)  # 0 for on, 1 for on
+
+    # Release the line when done
+    line.release()
+
+# Clean up camera and LED array (in case they were left running)
+def cleanup():
+    led_matrix = RPiLedMatrix()
+    led_matrix.off()
+    camera = Picamera2()
+    camera.stop()
+    camera.close()
+    
 # Generate coordinates to turn on LEDs in a spiral pattern, moving right up left down right up left down....
 # 0,0 is bottom left LED when rotation is 135 degrees. Allow offsets to center the starting point with optical axis. 
 # N.b. If offsets are non zero, we can't use entire 16x16 LED array.
 def LED_spiral(n, x_offset=0, y_offset=0):
-    # Input: n; gridsize to generate coordinates for
-    # Returns: x_coords, y_coords; arrays for LED coordinates 
     
     # Initialize the arrays to store the x and y coordinates
     x_coords = np.zeros(n**2, dtype=int)
@@ -100,19 +142,30 @@ def FT(x):
 def IFT(x):
     return np.fft.fftshift(ifft2(np.fft.ifftshift(x)))
 
-# Plotting for visualising reconstruction (used in reconstruct function)
-def plot(axes,fig, obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size):
+# Plotting for visualising reconstruction (regular python version, 1 axis to plot on)
+def plot_py(fig,axes,obj):
+    # We use axes[1] to show object
+    axes[1].cla()  # Clear the current axes
+    axes[1].imshow(np.abs(IFT(obj)), cmap='gray')
+    axes[1].set_title('Currently reconstructed object')
+    
+    # Update the figure
+    plt.draw()   
+    plt.pause(0.1)     
+    
+# Plotting for visualising reconstruction (notebook version, 3 axes to plot on)
+def plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size):
     # Clear previous plots
     for ax in axes:
         ax.cla()  # Clear the current axes
-      
+
     axes[0].imshow(np.log(np.abs(obj) + 1), cmap='gray') # Show with log scale
     axes[0].set_title(f'Spectrum of object: image {i+1}, iteration {iter+1} ')
-    if plot_mode == 1:
+    if plot_mode == 2: # Plot every image
         square = patches.Rectangle((x_start, y_start), img_size, img_size, linewidth=0.5, edgecolor='red', facecolor='none')
         axes[0].add_patch(square)
-        circle = patches.Circle((obj_center+kx[i],obj_center-ky[i]), radius=pupil_radius,linewidth =0.5, edgecolor='red',facecolor='none')
-        axes[0].add_patch(circle)
+        # circle = patches.Circle((obj_center+kx[i],obj_center-ky[i]), radius=pupil_radius,linewidth =0.5, edgecolor='red',facecolor='none')
+        # axes[0].add_patch(circle) # Need to pass pupil radius
 
     axes[1].imshow(np.abs(IFT(obj)), cmap='gray')
     axes[1].set_title('Currently reconstructed object')
@@ -126,9 +179,9 @@ def plot(axes,fig, obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,pl
     # plt.ylim((0,2))
     
     # Update the figure
-    # Update the figure
-    plt.draw()          # Redraw the current figure
-    plt.pause(0.1)      # Pause to allow the figure to update
+    clear_output(wait=True)  # Clear the output before displaying the new figure 
+    display(fig)  # Display the updated figure
+    plt.pause(0.1)  # Pause to allow the figure to update if needed
     
 # Update kx and ky for the current image by finding the kx and ky that minimise error between image estimate
 # and current low res image. search_range should be odd
@@ -248,26 +301,27 @@ def update_LED_positions_fast(obj,img,kx,ky,img_size,obj_center,image_number,sub
     return kx,ky  
 
 # Reconstruct object and pupil function using Quasi Newton algorithm
-def reconstruct(images, kx, ky, obj, pupil, options):
+def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
     # Inputs: 
     # images; low res image array data, in order taken
     # kx,ky; location of LEDs in Fourier domain, in order of images taken
     # obj; initial estimate for object in frequency domain
     # pupil; initial pupil function
     # options; alpha, beta (regularisation), max_iter, plotting, quality_threshold
+    # fig, axes; for plotting
     
     # Returns: 
     # rec_obj; recovered object
     # rec_pupil; recovered pupil function
-    # kx, ky; updated LED positions
+    # kx,ky; updated LED positions (or same as input if no LED correction)
     
     # Unpack options
     alpha = options['alpha'] # <10, DOES MAKE DIFFERENCE
     beta = options['beta'] # Not important
     max_iter = options['max_iter'] # Number of iterations to run algorithm (1 iteration uses all images)
-    plot_mode = options['plot_mode'] # 0, off; 1, plot every image; 2, plot every iteration
+    plot_mode = options['plot_mode'] # If using .py use 0,1. For notebook use 2,3
     quality_threshold = options['quality_threshold'] # Used to crop bad images from dataset
-    LED_correction = options['LED_correction'] # Correct kx,ky - LED coordinates
+    LED_correction = options['LED_correction'] # Do correction for kx,ky - LED coordinates
     moderator_on = options['moderator_on'] # Increases stability
     
     # Other parameters
@@ -278,6 +332,8 @@ def reconstruct(images, kx, ky, obj, pupil, options):
     pupil_binary = np.copy(pupil) # Original pupil function (binary mask)
     pupil = pupil.astype('complex64') # Pupil function for updating needs to be complex 
 
+    # For removing poor quality images
+    
     # Initialize empty lists to store good images and their coordinates
     good_images = []
     img_quality = []
@@ -303,11 +359,6 @@ def reconstruct(images, kx, ky, obj, pupil, options):
     ky = np.array(ky_new)
         
     update_size = np.zeros(num_images) # To monitor object update size (can spot instability numerically)
-     
-    # If plotting, create axis and figure here to save resources
-    if plot_mode != 0:
-        global pupil_radius 
-        fig, axes = plt.subplots(1, 3, figsize=(15,4))
 
     # Main loop
     for iter in range(max_iter):
@@ -315,8 +366,8 @@ def reconstruct(images, kx, ky, obj, pupil, options):
             x_start = int(obj_center + kx[i] - img_size//2) # For cropping object spectrum
             y_start = int(obj_center - ky[i] - img_size//2)  
             
-            # Define variables for object and pupil updating 
-             
+            # Define variables for object and pupil updating  
+                 
             # The relevant part of object spectrum to update
             object_update = obj[y_start:y_start+img_size, x_start:x_start+img_size]
              
@@ -354,45 +405,21 @@ def reconstruct(images, kx, ky, obj, pupil, options):
                 ky[i] = ky_new
                 
             # Plot every image
-            if plot_mode == 1:
-                plot(axes,fig, obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size)
+            if plot_mode == 2:
+                plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size) # Plotting for notebook
+        
+        # Status message
+        progress = int((iter+1)/max_iter * 100)
+        sys.stdout.write(f'\r Reconstruction Progress: {progress}%') # Write to same line
+        sys.stdout.flush()
         
         # Plot every iteration
-        if plot_mode == 2:
-            plot(axes,fig, obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size)
+        if plot_mode == 1:
+            plot_py(fig,axes,obj) # plotting for main.py 
+        elif plot_mode == 3:
+            plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size) # Plotting for notebook
+    
+    print('\n Reconstruction Done') # Write to new line
 
     return IFT(obj),pupil,kx,ky
 
-# Display images in a grid
-def display_data(grid_size,data_folder='data/recent'):
-
-    x,y = LED_spiral(grid_size,x_offset=0,y_offset=1) # get the coordinates of LEDs
-
-    fig, axes = plt.subplots(16, 16, figsize=(15,15))
-    fig.subplots_adjust(hspace=0.1, wspace=0.1)
-
-    for i in range(grid_size*grid_size):
-        image = Image.open(os.path.join(data_folder,f'image_{i}.png'))
-        row = -y[i] -1
-        col = x[i]
-        axes[row,col].imshow(image, cmap='gray')
-        axes[row,col].axis('off')
-        
-# Turn on fan
-def fan_on():
-    # Set the chip and line (pin number on the chip)
-    chip_name = "gpiochip4"
-    line_offset = 45  # This corresponds to GPIO pin 45
-
-    # Open the GPIO chip
-    chip = gpiod.Chip(chip_name)
-    line = chip.get_line(line_offset)
-
-    # Request the line as an output with a value of 0 (low)
-    line.request(consumer="my_gpio_control", type=gpiod.LINE_REQ_DIR_OUT)
-
-    # Set the GPIO pin to low (0) or high (1)
-    line.set_value(0)  # 0 for LOW, 1 for HIGH
-
-    # Release the line when done
-    line.release()

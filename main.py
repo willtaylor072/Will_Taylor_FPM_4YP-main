@@ -7,10 +7,11 @@ import numpy as np
 import time
 from RPiLedMatrix import RPiLedMatrix
 from picamera2 import Picamera2
-import gpiod
+import importlib 
 
 # Custom functions
 import fpm_functions as fpm 
+importlib.reload(fpm) # Reload
 
 ##########################################################################################################
 # Key setup variables
@@ -29,9 +30,9 @@ fpm_exposure = 300000  # In microseconds for FPM
 # Set parameters for reconstruction algorithm
 options = {
     'max_iter': 5, # Number of iterations
-    'alpha': 6, # Regularisation parameter, <10, DOES make a difference, 5 seems good for most cases
+    'alpha': 5, # Regularisation parameter, <10, DOES make a difference, 5 seems good for most cases
     'beta': 1, # Regularisation parameter, >0, not important
-    'plot_mode': 0, # 0, off; 1, plot every image; 2, plot every iteration
+    'plot_mode': 1, # 0, only plot object after reconstruction; 1, plot object during reconstruction (at each iteration)
     'quality_threshold': 0, # Will only use images with dynamic range greater than this (set to 0 to use all images)
     'moderator_on': False, # Will reduce impact on object update from low information images (helps stability)
     'LED_correction': False, # Adjust kx and ky values to their optimal positions
@@ -45,34 +46,24 @@ NA = 0.1 # Objective numerical apature
 PIX_SIZE = 1.09e-6 # Pixel size on object plane, m, 1.09um for 3D printed microscope (directly measured with USAF slide)
 WLENGTH = 550e-9 # Central wavelength of LED light, m
 
-###########################################################################################################
-# Setup and misc
-
-# Turn on RPI fan
-# Set the chip and line (pin number on the chip)
-chip_name = "gpiochip4"
-line_offset = 45  # This corresponds to GPIO pin 45
-# Open the GPIO chip
-chip = gpiod.Chip(chip_name)
-line = chip.get_line(line_offset)
-# Request the line as an output with a value of 0 (low)
-line.request(consumer="my_gpio_control", type=gpiod.LINE_REQ_DIR_OUT)
-# Set the GPIO pin to low (0) or high (1)
-line.set_value(0)  # 0 for LOW, 1 for HIGH
-# Release the line when done
-line.release()
-
-# Clean up camera and LED array (in case they were left running)
-led_matrix = RPiLedMatrix()
-led_matrix.off()
-camera = Picamera2()
-camera.stop()
-camera.close()
+# Miscelaneous 
+fpm.fan_on() # Turn on fan
+fpm.cleanup() # Clean up camera and LED matrix (turn on and off)
 
 #######################################################################################################################
 # Image preview and alignment process
 
-# Set up image gathering stage
+# Set up figure - this will be the main UI for the entire process
+plt.ion() # Allow live plotting
+fig, axes = plt.subplots(1, 2, figsize=(10, 5))  # Figure size (10x5)
+
+# Axis 0 will be full FOV, axis 1 will be cropped region
+axes[0].set_aspect(1456 / 1088)  # Aspect ratio for the full frame
+axes[1].set_aspect('equal')  # Aspect ratio for the cropped frame is square
+axes[0].set_title("Full Camera FOV")
+axes[1].set_title("Cropped Camera Region")
+
+# Image gathering parameters
 num_images = grid_size**2 # Total number of FPM images
 crop_start_x = int(1456/2 - img_size/2) # These crop values ensure images are in center of camera FOV
 crop_start_y = int(1088/2 - img_size/2)
@@ -115,15 +106,6 @@ def on_close(event):
     global plot_closed
     plot_closed = True  # Set flag when the plot window is closed
 
-# Set up interactive mode
-plt.ion()
-fig, axes = plt.subplots(1, 2, figsize=(10, 5))  # Figure size (10x5)
-
-# Adjust layout and axis sizes
-fig.subplots_adjust(left=0.05, right=0.95, bottom=0.1, top=0.9, wspace=0.3)
-axes[0].set_aspect(1456 / 1088)  # Aspect ratio for the full frame
-axes[1].set_aspect('equal')  # Aspect ratio for the cropped frame is square
-
 # Connect the events to their handlers
 fig.canvas.mpl_connect('key_press_event', on_key)
 fig.canvas.mpl_connect('close_event', on_close)
@@ -135,10 +117,6 @@ placeholder_cropped = np.zeros((img_size, img_size), dtype=np.uint8)  # Cropped 
 # Initialize the plots
 full_frame_plot = axes[0].imshow(placeholder_frame, vmin=0, vmax=255)  # Full frame plot
 cropped_frame_plot = axes[1].imshow(placeholder_cropped, vmin=0, vmax=255)  # Cropped frame plot
-
-# Set plot titles
-axes[0].set_title("Full Camera FOV")
-axes[1].set_title("Cropped Camera Region")
 
 # Main preview loop
 while not (quit_preview or plot_closed):
@@ -162,10 +140,12 @@ while not (quit_preview or plot_closed):
 
     plt.pause(0.05)  # Short pause for smoother updates
 
-plt.ioff() # Turn off interactive mode but leave figure open while waiting
+# Disconnect the events to their handlers now we are done with preview
+fig.canvas.mpl_disconnect('key_press_event')
+fig.canvas.mpl_disconnect('close_event')
 
 #########################################################################################################
-# End preview, start taking images
+# Start taking images now that sample is aligned
 
 # Take a brightfield image (already have brightfield LEDs on)
 camera.set_controls({"ExposureTime": brightfield_exposure})
@@ -173,6 +153,22 @@ brightfield = camera.capture_array()[crop_start_y:crop_start_y+img_size,crop_sta
 brightfield_pil = Image.fromarray(brightfield).convert('L') # Grayscale pillow image
 brightfield_pil.save(os.path.join(data_folder,'brightfield.png'), format='PNG') # Save as png
 brightfield = np.array(brightfield_pil) # Keep as array
+
+# Update main figure to indicate FPM process has begun
+# Axis 0 will be now be brightfield image, axis 1 will be reconstruction 
+axes[0].cla()
+axes[1].cla()
+axes[0].set_aspect('equal') 
+axes[1].set_aspect('equal')
+axes[0].set_title("Brightfield")
+axes[1].set_title("Reconstruction")
+axes[0].imshow(brightfield,cmap='gray')
+axes[1].imshow(placeholder_cropped,cmap='gray') # Use placeholder from earlier since we don't have reconstruction yet
+
+# Refresh
+plt.draw()   
+plt.pause(0.1)  
+
 
 # Take FPM images
 images = np.zeros((img_size,img_size,num_images))  # np array to store grayscale arrays
@@ -222,7 +218,7 @@ sampling_ratio = F_SAMPLING / F_CUTOFF
 # x,y is our normalised frequency domain for the images, cutoff frequency = 1 (both x and y)
 x,y = np.meshgrid(np.linspace(-sampling_ratio,sampling_ratio,img_size), np.linspace(-sampling_ratio,sampling_ratio,img_size))
 theta,r = np.arctan2(y,x), np.sqrt(x**2 + y**2) # Polar coordinates
-pupil_radius = (1/sampling_ratio) * (img_size/2) # For plotting and diagnostics
+pupil_radius = (1/sampling_ratio) * (img_size/2) # Diagnostics (not used explicitly)
 pupil = r<1 # Binary mask for frequencies below cutoff frequency (higher frequencies cannot be resolved due to diffraction)
 
 # Initial object estimate (using first image)
@@ -234,7 +230,7 @@ obj = np.pad(F_img,pad_width,'constant',constant_values=0) # Initial object in 
 
 # Reconstruction with calculated kx and ky (quickstart)
 kx,ky = fpm.calculate_fourier_positions(x_abs, y_abs, LED2SAMPLE, WLENGTH, PIX_SIZE, img_size)
-rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct(images, kx, ky, obj, pupil, options)
+rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct(images, kx, ky, obj, pupil, options, fig, axes)
 # np.save(os.path.join(data_path,'kx_updated'),kx_updated)
 # np.save(os.path.join(data_path,'ky_updated'),ky_updated)
 
@@ -243,33 +239,31 @@ rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct(images, kx, ky, obj, p
 # ky = np.load(os.path.join(data_path,'ky_updated.npy'))
 # rec_obj,rec_pupil,_,_ = reconstruct(images, kx, ky, obj, pupil, options)
 
-# Plot results
-fig, axes = plt.subplots(1, 3, figsize=(15,3))
+# Keep plot open
+plt.ioff()
+plt.show() 
 
-contrast = 3 # Contrast for magnitude plot
+###########################################################################################
+# Save results
+
+# Magnitude
+contrast = 1 # Contrast for magnitude plot
 
 obj_mag = np.abs(rec_obj)**contrast # Magnitude 
 obj_mag = obj_mag / np.max(np.abs(obj_mag)) # Normalise
-obj_arg = np.angle(rec_obj) # Phase
-obj_arg = obj_arg / np.max(np.abs(obj_arg)) # Normalise
 
-axes[0].imshow(obj_mag,cmap='gray')
-axes[0].set_title('Object magnitude')
-axes[1].imshow(obj_arg, cmap='gray')
-axes[1].set_title('Object phase')
-axes[2].imshow(brightfield, cmap='gray')
-axes[2].set_title('Brightfield image')
-
-plt.show()
-
-# Save results
 obj_mag = (obj_mag * 255).astype(np.uint8)
 obj_mag = Image.fromarray(obj_mag)
 obj_mag.save('results/recent/magnitude.png')
+
+# Phase
+obj_arg = np.angle(rec_obj) # Phase
+obj_arg = obj_arg / np.max(np.abs(obj_arg)) # Normalise
 
 obj_arg = plt.cm.gray(obj_arg)  # Necessary for saving image
 obj_arg = (obj_arg * 255).astype(np.uint8)
 obj_arg = Image.fromarray(obj_arg)
 obj_arg.save('results/recent/phase.png',format='PNG')
 
+# Brightfield
 brightfield_pil.save(os.path.join(results_folder,'brightfield.png'), format='PNG') # Also save a copy to the results
