@@ -7,7 +7,7 @@ import os
 import sys
 from PIL import Image
 import numpy as np
-from scipy.fft import fft2, ifft2
+from scipy.fft import fft2, ifft2, fftshift, ifftshift
 
 # Display images in a grid
 def display_data(grid_size,data_folder='data/recent'):
@@ -106,11 +106,11 @@ def calculate_fourier_positions(x, y, LED2SAMPLE, WLENGTH, PIX_SIZE, img_size):
 
 # Shifted fourier transform
 def FT(x):
-    return np.fft.fftshift(fft2(np.fft.ifftshift(x)))
+    return fftshift(fft2(x))
 
 # Shifted inverse fourier transform
 def IFT(x):
-    return np.fft.fftshift(ifft2(np.fft.ifftshift(x)))
+    return ifft2(ifftshift(x))
 
 # Plotting for visualising reconstruction (regular python version, 1 axis to plot on)
 def plot_py(fig,axes,obj):
@@ -339,13 +339,13 @@ def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
             # Define variables for object and pupil updating  
                  
             # The relevant part of object spectrum to update
-            object_update = obj[y_start:y_start+img_size, x_start:x_start+img_size]
+            object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size]
              
             # Measured image amplitude
             img = np.sqrt(images[:,:,i])
             
             # Estimated image amplitude from object (complex)
-            img_est = IFT(object_update)
+            img_est = IFT(object_cropped)
             
             # The update image (in Fourier domain) is composed of the magnitude of the measured image, the phase of the estimated image
             # and also the spectrum of the estimated image is subtracted
@@ -358,13 +358,13 @@ def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
             if moderator_on:
                 moderator = (img_quality[i]/np.max(img_quality)) # Moderate update step based on image quality (provides stability)
             else:
-                moderator = iter
+                moderator = 1
             obj[y_start:y_start+img_size, x_start:x_start+img_size] += moderator * object_update # Add to main spectrum
             update_size[i] = np.mean(np.abs(object_update)) # To check instability 
             
             # Pupil update
-            numerator = np.abs(object_update) * np.conj(object_update) * update_image * pupil_binary
-            denominator = np.max(obj) * (np.abs(object_update)**2 + beta)
+            numerator = np.abs(object_cropped) * np.conj(object_cropped) * update_image * pupil_binary
+            denominator = np.max(np.abs(obj)) * (np.abs(object_cropped)**2 + beta)
             pupil_update = numerator / denominator
             pupil += pupil_update
       
@@ -393,7 +393,7 @@ def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
 
     return IFT(obj),pupil,kx,ky
 
-# Reconstruct object and pupil function using Quasi Newton algorithm, modified version.
+# Reconstruct object and pupil function using Quasi Newton algorithm.
 def reconstruct_V2(images, kx, ky, obj, pupil, options, fig, axes):
     # Inputs: 
     # images; low res image array data, in order taken
