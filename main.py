@@ -8,6 +8,7 @@ import time
 from RPiLedMatrix import RPiLedMatrix
 from picamera2 import Picamera2
 import importlib 
+import gpiod
 
 # Custom functions
 import fpm_functions as fpm 
@@ -31,8 +32,8 @@ LED_delay = 0.5 # In seconds for pause between FPM images to switch LED
 # Set parameters for reconstruction algorithm
 options = {
     'max_iter': 5, # Number of iterations
-    'alpha': 5, # Regularisation parameter, <10, DOES make a difference, 5 seems good for most cases
-    'beta': 100, # Regularisation parameter, >0, not important
+    'alpha': 1, # Regularisation parameter for object update, <10
+    'beta': 1, # Regularisation parameter for pupil update, >1
     'plot_mode': 1, # 0, only plot object after reconstruction; 1, plot object during reconstruction (at each iteration)
     'quality_threshold': 0, # Will only use images with dynamic range greater than this (set to 0 to use all images)
     'moderator_on': False, # Will reduce impact on object update from low information images (helps stability)
@@ -48,8 +49,29 @@ PIX_SIZE = 1.09e-6 # Pixel size on object plane, m, 1.09um for 3D printed micros
 WLENGTH = 550e-9 # Central wavelength of LED light, m
 
 # Miscelaneous 
-fpm.fan_on() # Turn on fan
-fpm.cleanup() # Clean up camera and LED matrix (turn on and off)
+
+# Turn on fan
+def fan_on():
+    # Set the chip and line (pin number on the chip)
+    chip_name = "gpiochip4"
+    line_offset = 45  # This corresponds to GPIO pin 45
+    # Open the GPIO chip
+    chip = gpiod.Chip(chip_name)
+    line = chip.get_line(line_offset)
+    # Request the line as an output with a value of 0 (low)
+    line.request(consumer="my_gpio_control", type=gpiod.LINE_REQ_DIR_OUT)
+    # Set the GPIO pin
+    line.set_value(0)  # 0 for on, 1 for on
+    # Release the line when done
+    line.release()
+
+# Clean up camera and LED array (in case they were left running)
+def cleanup():
+    led_matrix = RPiLedMatrix()
+    led_matrix.off()
+    camera = Picamera2()
+    camera.stop()
+    camera.close()
 
 #######################################################################################################################
 # Image preview and alignment process
@@ -204,8 +226,8 @@ camera.close()
 # Reconstruction
 
 # Derived variables
-F_CUTOFF = 2*NA/WLENGTH # Highest spatial frequency we can resolve in the optical system due to diffraction, lp/m
-F_SAMPLING = 1/PIX_SIZE # Sampling frequency (based on sensor pixel size and magnification), lp/m
+f_cutoff = 2*NA/WLENGTH # Highest spatial frequency we can resolve in the optical system due to diffraction, lp/m
+f_sampling = 1/PIX_SIZE # Sampling frequency (based on sensor pixel size and magnification), lp/m
 x_abs = (x_coords - x_coords[0])*LED_P # x distances of LEDs from center LED
 y_abs = (y_coords - y_coords[0])*LED_P # y distances of LEDs from center LED
 
@@ -216,11 +238,11 @@ print(f'Upsampling ratio: {obj_size/img_size}; Reconstructed Pixel Size: {int(1e
 
 # Initial pupil function (binary mask)
 # Nyquist sampling criterion: sampling_ratio >2 -> oversampling, sampling_ratio <2 -> undersampling (aliasing may occur)
-sampling_ratio = F_SAMPLING / F_CUTOFF 
+sampling_ratio = f_sampling / f_cutoff 
 # x,y is our normalised frequency domain for the images, cutoff frequency = 1 (both x and y)
 x,y = np.meshgrid(np.linspace(-sampling_ratio,sampling_ratio,img_size), np.linspace(-sampling_ratio,sampling_ratio,img_size))
 theta,r = np.arctan2(y,x), np.sqrt(x**2 + y**2) # Polar coordinates
-pupil_radius = (1/sampling_ratio) * (img_size/2) # Diagnostics (not used explicitly)
+# radius of pupil in pixels = (1/sampling_ratio) * (img_size/2)
 pupil = r<1 # Binary mask for frequencies below cutoff frequency (higher frequencies cannot be resolved due to diffraction)
 
 # Initial object estimate (using first image)
@@ -248,24 +270,23 @@ plt.show()
 ###########################################################################################
 # Save results
 
-# Magnitude
-contrast = 1 # Contrast for magnitude plot
+# Recovered object
+obj_mag = np.abs(rec_obj) # Magnitude
+obj_arg = np.angle(rec_obj) # Phase
 
-obj_mag = np.abs(rec_obj)**contrast # Magnitude 
-obj_mag = obj_mag / np.max(np.abs(obj_mag)) # Normalise
+# Recovered pupil
+pupil_mag = np.abs(rec_pupil)
+pupil_arg = np.angle(rec_pupil)
 
+obj_mag = obj_mag / np.max(np.abs(obj_mag))
 obj_mag = (obj_mag * 255).astype(np.uint8)
 obj_mag = Image.fromarray(obj_mag)
 obj_mag.save('results/recent/magnitude.png')
 
-# Phase
-obj_arg = np.angle(rec_obj) # Phase
-obj_arg = obj_arg / np.max(np.abs(obj_arg)) # Normalise
-
-obj_arg = plt.cm.gray(obj_arg)  # Necessary for saving image
+obj_arg = plt.cm.hot(obj_arg)  # Use colormap
 obj_arg = (obj_arg * 255).astype(np.uint8)
 obj_arg = Image.fromarray(obj_arg)
 obj_arg.save('results/recent/phase.png',format='PNG')
 
-# Brightfield
-brightfield_pil.save(os.path.join(results_folder,'brightfield.png'), format='PNG') # Also save a copy to the results
+bf = Image.open(os.path.join(data_folder,'brightfield.png'))
+bf.save('results/recent/brightfield.png')
