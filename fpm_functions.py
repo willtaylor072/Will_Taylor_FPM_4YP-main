@@ -309,7 +309,7 @@ def reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes):
             
             # The relevant part of object spectrum to update
             object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size] # Updates to object_cropped will directly modify main spectrum
-                        
+            
             # Measured image amplitude
             img = np.sqrt(images[:,:,i])
             
@@ -324,7 +324,7 @@ def reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes):
             numerator = np.abs(pupil) * np.conj(pupil) * update_image
             denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
             object_update = numerator / denominator
-            obj[y_start:y_start+img_size, x_start:x_start+img_size] += object_update
+            object_cropped += object_update # Update cropped region
 
             # Pupil update
             numerator = np.abs(object_cropped) * np.conj(object_cropped) * update_image * pupil_binary
@@ -416,7 +416,7 @@ def reconstruct_V1_test(images, kx, ky, obj, pupil, options, fig, axes):
             denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
             object_update = numerator / denominator
             object_cropped += object_update
-            obj[y_start:y_start+img_size, x_start:x_start+img_size] = object_cropped
+            obj[y_start:y_start+img_size, x_start:x_start+img_size] = np.copy(object_cropped)
 
             # Pupil update
             numerator = np.abs(object_cropped) * np.conj(object_cropped) * update_image * pupil_binary
