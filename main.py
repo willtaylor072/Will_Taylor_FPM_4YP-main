@@ -23,15 +23,16 @@ results_folder = 'results/recent' # For saving results
 # Imaging parameters
 grid_size = 5 # 1->16, recommend 4-8 for stability, time and performance balacnce
 img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
-preview_exposure = 30000 # In microseconds for preview
-brightfield_exposure = 50000  # In microseconds for brightfield
-fpm_exposure = 30000  # In microseconds for FPM
+preview_exposure = 50000 # In microseconds for preview
+brightfield_exposure = 80000  # In microseconds for brightfield
+fpm_exposure = 700000  # In microseconds for FPM image capture
+LED_delay = 0.5 # In seconds for pause between FPM images to switch LED
 
 # Set parameters for reconstruction algorithm
 options = {
     'max_iter': 5, # Number of iterations
     'alpha': 5, # Regularisation parameter, <10, DOES make a difference, 5 seems good for most cases
-    'beta': 1, # Regularisation parameter, >0, not important
+    'beta': 100, # Regularisation parameter, >0, not important
     'plot_mode': 1, # 0, only plot object after reconstruction; 1, plot object during reconstruction (at each iteration)
     'quality_threshold': 0, # Will only use images with dynamic range greater than this (set to 0 to use all images)
     'moderator_on': False, # Will reduce impact on object update from low information images (helps stability)
@@ -149,6 +150,7 @@ fig.canvas.mpl_disconnect('close_event')
 
 # Take a brightfield image (already have brightfield LEDs on)
 camera.set_controls({"ExposureTime": brightfield_exposure})
+# time.sleep(0.5)
 brightfield = camera.capture_array()[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size] # img_size x img_size RGB image
 brightfield_pil = Image.fromarray(brightfield).convert('L') # Grayscale pillow image
 brightfield_pil.save(os.path.join(data_folder,'brightfield.png'), format='PNG') # Save as png
@@ -177,7 +179,7 @@ camera.set_controls({"ExposureTime": fpm_exposure})
 
 for i in range(num_images):
     led_matrix.show_pixel(x_coords[i], y_coords[i], brightness=1)
-    time.sleep(0.2)  # Short pause for LED
+    time.sleep(LED_delay)  # Short pause for LED to turn on (possibly can remove)
     image = camera.capture_array()[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size] # img_size x img_size RGB image
     image_pil = Image.fromarray(image).convert('L') # Grayscale pillow image
     img_path = os.path.join(data_folder, f'image_{i}.png') # Create path name

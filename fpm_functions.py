@@ -185,7 +185,7 @@ def plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,it
     
 # Update kx and ky for the current image by finding the kx and ky that minimise error between image estimate
 # and current low res image. search_range should be odd
-def update_LED_positions_accurate(obj,img,kx,ky,img_size,obj_center,image_number,search_range=10):
+def update_LED_positions_accurate(obj,img,kx,ky,img_size,obj_center,image_number,search_range=5):
     
     # Easier to crop obj using x_start and y_start 
     x_start = int(obj_center + kx - img_size//2)
@@ -239,7 +239,7 @@ def update_LED_positions_accurate(obj,img,kx,ky,img_size,obj_center,image_number
 
 # Modification of accurate algorithm to use a subrange to search for minimum error LED position.
 # CURRENTLY DOES NOT WORK - landscape is not smooth, so we don't converge using subranges
-def update_LED_positions_fast(obj,img,kx,ky,img_size,obj_center,image_number,subrange_size=10):
+def update_LED_positions_fast(obj,img,kx,ky,img_size,obj_center,image_number,subrange_size=5):
     
     iteration_limit = 10 # Max number of re-center and search iterations
     found_min = False # If we don't find a minimum within iteration_limit then don't update kx,ky
