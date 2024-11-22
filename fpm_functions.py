@@ -271,13 +271,13 @@ def update_LED_positions_fast(obj,img,kx,ky,img_size,obj_center,image_number,sub
     return kx,ky  
 
 # Reconstruct object and pupil function using Quasi Newton algorithm
-def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
+def reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes):
     # Inputs: 
     # images; low res image array data, in order taken
     # kx,ky; location of LEDs in Fourier domain, in order of images taken
     # obj; initial estimate for object in frequency domain
     # pupil; initial pupil function
-    # options; alpha, beta (regularisation), max_iter, plotting, quality_threshold
+    # options; alpha, beta (regularisation), max_iter, plotting, LED_correction
     # fig, axes; for plotting
     
     # Returns: 
@@ -290,9 +290,7 @@ def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
     beta = options['beta'] # Not important
     max_iter = options['max_iter'] # Number of iterations to run algorithm (1 iteration uses all images)
     plot_mode = options['plot_mode'] # If using .py use 0,1. For notebook use 2,3
-    quality_threshold = options['quality_threshold'] # Used to crop bad images from dataset
     LED_correction = options['LED_correction'] # Do correction for kx,ky - LED coordinates
-    moderator_on = options['moderator_on'] # Increases stability
     
     # Other parameters
     img_size = images.shape[0] # Square, same size as pupil function
@@ -300,73 +298,41 @@ def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
     obj_size = obj.shape[0] # Square
     obj_center = obj_size // 2 # Center of object (used for inserting spectra in correct place)
     pupil_binary = np.copy(pupil) # Original pupil function (binary mask)
-    pupil = pupil.astype('complex64') # Pupil function for updating needs to be complex 
-
-    # For removing poor quality images
-    
-    # Initialize empty lists to store good images and their coordinates
-    good_images = []
-    img_quality = []
-    kx_new = []
-    ky_new = []
-    
-    # Loop through each image and check if it meets the quality threshold
-    for i in range(num_images):
-        img = images[:, :, i] # Image to check
-        dynamic_range = (np.max(img) - np.min(img)) * 256
-        if dynamic_range >= quality_threshold:
-            good_images.append(img)   # Append the good image to the list
-            img_quality.append(dynamic_range) # Save the quality metric
-            kx_new.append(kx[i])      # Append the corresponding kx coordinate
-            ky_new.append(ky[i])      # Append the corresponding ky coordinate
-            
-    # Convert lists to numpy arrays and override the old variables to save memory
-    images = np.array(good_images)  # Shape will be (num_good_images, img_size, img_size)
-    images = np.transpose(good_images, (1, 2, 0)) # Shape will be (img_size, img_size, num_good_images) as required
-    num_images = images.shape[2]
-    img_quality = np.array(img_quality)
-    kx = np.array(kx_new)
-    ky = np.array(ky_new)
-        
+    pupil = pupil.astype('complex64') # Pupil function for updating needs to be complex   
     update_size = np.zeros(num_images) # To monitor object update size (can spot instability numerically)
-
+    
     # Main loop
     for iter in range(max_iter):
         for i in range(num_images): # For each image in data set   
             x_start = int(obj_center + kx[i] - img_size//2) # For cropping object spectrum
             y_start = int(obj_center - ky[i] - img_size//2)  
             
-            # Define variables for object and pupil updating  
-                 
             # The relevant part of object spectrum to update
-            object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size]
-             
+            object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size] # Updates to object_cropped will directly modify main spectrum
+                        
             # Measured image amplitude
             img = np.sqrt(images[:,:,i])
             
-            # Estimated image amplitude from object (complex)
+            # Estimated image amplitude (complex)
             img_est = IFT(object_cropped)
             
             # The update image (in Fourier domain) is composed of the magnitude of the measured image, the phase of the estimated image
             # and also the spectrum of the estimated image is subtracted
             update_image = FT(img*np.exp(1j*np.angle(img_est))) - FT(img_est)
-            
+        
             # Object update
             numerator = np.abs(pupil) * np.conj(pupil) * update_image
             denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
             object_update = numerator / denominator
-            if moderator_on:
-                moderator = (img_quality[i]/np.max(img_quality)) # Moderate update step based on image quality (provides stability)
-            else:
-                moderator = 1
-            obj[y_start:y_start+img_size, x_start:x_start+img_size] += moderator * object_update # Add to main spectrum
-            update_size[i] = np.mean(np.abs(object_update)) # To check instability 
-            
+            obj[y_start:y_start+img_size, x_start:x_start+img_size] += object_update
+
             # Pupil update
             numerator = np.abs(object_cropped) * np.conj(object_cropped) * update_image * pupil_binary
             denominator = np.max(np.abs(obj)) * (np.abs(object_cropped)**2 + beta)
             pupil_update = numerator / denominator
             pupil += pupil_update
+            
+            update_size[i] = np.mean(np.abs(object_update)) # To check instability
       
             # LED position (kx,ky) correction for image we just used
             if LED_correction:
@@ -393,7 +359,99 @@ def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
 
     return IFT(obj),pupil,kx,ky
 
-# Reconstruct object and pupil function using Quasi Newton algorithm.
+# V1 test
+def reconstruct_V1_test(images, kx, ky, obj, pupil, options, fig, axes):
+    # Inputs: 
+    # images; low res image array data, in order taken
+    # kx,ky; location of LEDs in Fourier domain, in order of images taken
+    # obj; initial estimate for object in frequency domain
+    # pupil; initial pupil function
+    # options; alpha, beta (regularisation), max_iter, plotting, LED_correction
+    # fig, axes; for plotting
+    
+    # Returns: 
+    # rec_obj; recovered object
+    # rec_pupil; recovered pupil function
+    # kx,ky; updated LED positions (or same as input if no LED correction)
+    
+    # Unpack options
+    alpha = options['alpha'] # <10, DOES MAKE DIFFERENCE
+    beta = options['beta'] # Not important
+    max_iter = options['max_iter'] # Number of iterations to run algorithm (1 iteration uses all images)
+    plot_mode = options['plot_mode'] # If using .py use 0,1. For notebook use 2,3
+    LED_correction = options['LED_correction'] # Do correction for kx,ky - LED coordinates
+    
+    # Other parameters
+    img_size = images.shape[0] # Square, same size as pupil function
+    num_images = images.shape[2]
+    obj_size = obj.shape[0] # Square
+    obj_center = obj_size // 2 # Center of object (used for inserting spectra in correct place)
+    pupil_binary = np.copy(pupil) # Original pupil function (binary mask)
+    pupil = pupil.astype('complex64') # Pupil function for updating needs to be complex   
+    update_size = np.zeros(num_images) # To monitor object update size (can spot instability numerically)
+    
+    # Main loop
+    for iter in range(max_iter):
+        for i in range(num_images): # For each image in data set   
+            x_start = int(obj_center + kx[i] - img_size//2) # For cropping object spectrum
+            y_start = int(obj_center - ky[i] - img_size//2)  
+            
+            # The relevant part of object spectrum to update
+            # object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size] # Updates to object_cropped will directly modify main spectrum
+            # object_cropped = np.copy(obj[y_start:y_start+img_size, x_start:x_start+img_size]) # Create copy but don't apply pupil
+            object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size] * pupil_binary # Creates new array due to * operation
+            
+            # Measured image amplitude
+            img = np.sqrt(images[:,:,i])
+            
+            # Estimated image amplitude from cropped object and current pupil (complex)
+            img_est = IFT(obj[y_start:y_start+img_size, x_start:x_start+img_size] * pupil)
+            
+            # The update image (in Fourier domain) is composed of the magnitude of the measured image, the phase of the estimated image
+            # and also the spectrum of the estimated image is subtracted
+            update_image = FT(img*np.exp(1j*np.angle(img_est))) - FT(img_est)
+        
+            # Object update
+            numerator = np.abs(pupil) * np.conj(pupil) * update_image
+            denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
+            object_update = numerator / denominator
+            object_cropped += object_update
+            obj[y_start:y_start+img_size, x_start:x_start+img_size] = object_cropped
+
+            # Pupil update
+            numerator = np.abs(object_cropped) * np.conj(object_cropped) * update_image * pupil_binary
+            denominator = np.max(np.abs(obj)) * (np.abs(object_cropped)**2 + beta)
+            pupil_update = numerator / denominator
+            pupil += pupil_update
+            
+            update_size[i] = np.mean(np.abs(object_update)) # To check instability
+      
+            # LED position (kx,ky) correction for image we just used
+            if LED_correction:
+                kx_new,ky_new = update_LED_positions_accurate(obj,img,kx[i],ky[i],img_size,obj_center,i)
+                kx[i] = kx_new # Updated LED positions
+                ky[i] = ky_new
+                
+            # Plot every image
+            if plot_mode == 2:
+                plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size) # Plotting for notebook
+        
+        # Status message
+        progress = int((iter+1)/max_iter * 100)
+        sys.stdout.write(f'\r Reconstruction Progress: {progress}%') # Write to same line
+        sys.stdout.flush()
+        
+        # Plot every iteration
+        if plot_mode == 1:
+            plot_py(fig,axes,obj) # plotting for main.py 
+        elif plot_mode == 3:
+            plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size) # Plotting for notebook
+    
+    print('\n Reconstruction Done!') # Write to new line
+
+    return IFT(obj),pupil,kx,ky
+
+# EPRY algorithm
 def reconstruct_V2(images, kx, ky, obj, pupil, options, fig, axes):
     # Inputs: 
     # images; low res image array data, in order taken
@@ -434,7 +492,7 @@ def reconstruct_V2(images, kx, ky, obj, pupil, options, fig, axes):
             # Define variables for object and pupil updating  
                  
             # The relevant part of object spectrum to update
-            object_update = obj[y_start:y_start+img_size, x_start:x_start+img_size]
+            object_update = np.copy(obj[y_start:y_start+img_size, x_start:x_start+img_size])
              
             # Measured image amplitude
             img = np.sqrt(images[:,:,i])

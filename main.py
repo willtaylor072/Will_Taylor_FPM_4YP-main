@@ -35,8 +35,6 @@ options = {
     'alpha': 1, # Regularisation parameter for object update, <10
     'beta': 1, # Regularisation parameter for pupil update, >1
     'plot_mode': 1, # 0, only plot object after reconstruction; 1, plot object during reconstruction (at each iteration)
-    'quality_threshold': 0, # Will only use images with dynamic range greater than this (set to 0 to use all images)
-    'moderator_on': False, # Will reduce impact on object update from low information images (helps stability)
     'LED_correction': False, # Adjust kx and ky values to their optimal positions
 }
 
@@ -254,7 +252,7 @@ obj = np.pad(F_img,pad_width,'constant',constant_values=0) # Initial object in 
 
 # Reconstruction with calculated kx and ky (quickstart)
 kx,ky = fpm.calculate_fourier_positions(x_abs, y_abs, LED2SAMPLE, WLENGTH, PIX_SIZE, img_size)
-rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct(images, kx, ky, obj, pupil, options, fig, axes)
+rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes)
 # np.save(os.path.join(data_path,'kx_updated'),kx_updated)
 # np.save(os.path.join(data_path,'ky_updated'),ky_updated)
 
