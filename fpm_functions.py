@@ -315,6 +315,7 @@ def reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes):
             
             # Estimated image amplitude (complex)
             img_est = IFT(object_cropped)
+            # img_est = IFT(object_cropped * pupil) # Why doesn't this work?
             
             # The update image (in Fourier domain) is composed of the magnitude of the measured image, the phase of the estimated image
             # and also the spectrum of the estimated image is subtracted
@@ -397,15 +398,16 @@ def reconstruct_V1_test(images, kx, ky, obj, pupil, options, fig, axes):
             y_start = int(obj_center - ky[i] - img_size//2)  
             
             # The relevant part of object spectrum to update
-            # object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size] # Updates to object_cropped will directly modify main spectrum
+            object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size] # Updates to object_cropped will directly modify main spectrum
             # object_cropped = np.copy(obj[y_start:y_start+img_size, x_start:x_start+img_size]) # Create copy but don't apply pupil
-            object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size] * pupil_binary # Creates new array due to * operation
+            # object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size] * pupil_binary # Creates new array due to * operation
             
             # Measured image amplitude
             img = np.sqrt(images[:,:,i])
             
             # Estimated image amplitude from cropped object and current pupil (complex)
-            img_est = IFT(obj[y_start:y_start+img_size, x_start:x_start+img_size] * pupil)
+            img_est = IFT(object_cropped)
+            # img_est = IFT(object_cropped * pupil) # Causes instability but don't know why
             
             # The update image (in Fourier domain) is composed of the magnitude of the measured image, the phase of the estimated image
             # and also the spectrum of the estimated image is subtracted
@@ -416,14 +418,14 @@ def reconstruct_V1_test(images, kx, ky, obj, pupil, options, fig, axes):
             denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
             object_update = numerator / denominator
             object_cropped += object_update
-            obj[y_start:y_start+img_size, x_start:x_start+img_size] = np.copy(object_cropped)
+            # obj[y_start:y_start+img_size, x_start:x_start+img_size] = np.copy(object_cropped)
 
             # Pupil update
             numerator = np.abs(object_cropped) * np.conj(object_cropped) * update_image * pupil_binary
             denominator = np.max(np.abs(obj)) * (np.abs(object_cropped)**2 + beta)
             pupil_update = numerator / denominator
             pupil += pupil_update
-            
+           
             update_size[i] = np.mean(np.abs(object_update)) # To check instability
       
             # LED position (kx,ky) correction for image we just used
