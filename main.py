@@ -251,7 +251,7 @@ pad_width = int((obj_size - img_size) / 2) # Padding to make correct size
 obj = np.pad(F_img,pad_width,'constant',constant_values=0) # Initial object in frequency domain
 
 # Reconstruction with calculated kx and ky (quickstart)
-kx,ky = fpm.calculate_fourier_positions(x_abs, y_abs, LED2SAMPLE, WLENGTH, PIX_SIZE, img_size)
+kx,ky = fpm.calculate_wavevectors(x_abs, y_abs, LED2SAMPLE, WLENGTH, PIX_SIZE, img_size)
 rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes)
 # np.save(os.path.join(data_path,'kx_updated'),kx_updated)
 # np.save(os.path.join(data_path,'ky_updated'),ky_updated)

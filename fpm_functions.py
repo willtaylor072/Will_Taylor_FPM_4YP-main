@@ -8,6 +8,7 @@ import sys
 from PIL import Image
 import numpy as np
 from scipy.fft import fft2, ifft2, fftshift, ifftshift
+import cv2
 
 # Display images in a grid
 def display_data(grid_size,data_folder='data/recent'):
@@ -89,8 +90,8 @@ def calculate_object_size(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, P
     
     return np.ceil(2*np.round(2*max_freq/sampling_size)/img_size)*img_size # obj_size will be a multiple of img_size
 
-# Find the LED positions in Fourier domain
-def calculate_fourier_positions(x, y, LED2SAMPLE, WLENGTH, PIX_SIZE, img_size):
+# Find the LED wavevectors (location of each image in Fourier domain)
+def calculate_wavevectors(x, y, LED2SAMPLE, WLENGTH, PIX_SIZE, img_size):
     
     sampling_size = 1/(img_size*PIX_SIZE) # Sampling size in x
     kx = np.zeros(len(x)) # x components of wavevector for each LED illumination
@@ -114,7 +115,7 @@ def IFT(x):
 
 # Plotting for visualising reconstruction (regular python version, 1 axis to plot on)
 def plot_py(fig,axes,obj):
-    # We use axes[1] to show object
+    # We use axes[1] to show object (axis[0] is for brightfield reference)
     axes[1].cla()  # Clear the current axes
     axes[1].imshow(np.abs(IFT(obj)), cmap='gray')
     axes[1].set_title('Currently reconstructed object')
@@ -123,12 +124,13 @@ def plot_py(fig,axes,obj):
     plt.draw()   
     plt.pause(0.1)     
     
-# Plotting for visualising reconstruction (notebook version, 3 axes to plot on)
-def plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size):
+# Plotting for visualising reconstruction (notebook version)
+def plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size,quality):
     # Clear previous plots
     for ax in axes:
         ax.cla()  # Clear the current axes
 
+    # Show spectrum
     axes[0].imshow(np.log(np.abs(obj) + 1), cmap='gray') # Show with log scale
     axes[0].set_title(f'Spectrum of object: image {i+1}, iteration {iter+1} ')
     if plot_mode == 2: # Plot every image
@@ -137,16 +139,23 @@ def plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,it
         # circle = patches.Circle((obj_center+kx[i],obj_center-ky[i]), radius=pupil_radius,linewidth =0.5, edgecolor='red',facecolor='none')
         # axes[0].add_patch(circle) # Need to pass pupil radius
 
+    # Show reconstructed image
     axes[1].imshow(np.abs(IFT(obj)), cmap='gray')
     axes[1].set_title('Currently reconstructed object')
     
+    # Show pupil
     # axes[2].imshow(np.angle(pupil),cmap='gray')
     # axes[2].set_title('Current pupil phase')
     # axes[2].imshow(np.abs(pupil),cmap='gray')
     # axes[2].set_title('Current pupil magnitude')
+    
+    # Show update size
     axes[2].plot(update_size)
     axes[2].set_title('Object update size')
-    # plt.ylim((0,2))
+    
+    # Show quality of reconstruction
+    axes[3].plot(quality,'r')
+    axes[3].set_title('Reconstruction sharpness')
     
     # Update the figure
     clear_output(wait=True)  # Clear the output before displaying the new figure 
@@ -171,8 +180,8 @@ def update_LED_positions_accurate(obj,img,kx,ky,img_size,obj_center,image_number
     # Find error between image and estimated image, where we offset the object crop region slightly to find estimated image
     for x in x_offsets:
         for y in y_offsets:       
-            img_est = IFT(obj[y_start+y:y_start+y+img_size, x_start+x:x_start+x+img_size]) # Estimated image is IFT of cropped spectrum at the shifted center
-            error = np.sum(np.abs(img_est - img)**2) # Error between estimated and measured image
+            estimated_image = IFT(obj[y_start+y:y_start+y+img_size, x_start+x:x_start+x+img_size]) # Estimated image is IFT of cropped spectrum at the shifted center
+            error = np.sum(np.abs(estimated_image - img)**2) # Error between estimated and measured image
             # error_heatmap[(search_range // 2 - y), (x + search_range // 2)] = error # Add error to heatmap (convert from cartesian to image coords)
     
             # Track the smallest error position
@@ -229,8 +238,8 @@ def update_LED_positions_fast(obj,img,kx,ky,img_size,obj_center,image_number,sub
         # Find error between image and estimated image, where we offset the object crop region slightly to find estimated image
         for x in x_offsets: 
             for y in y_offsets:       
-                img_est = IFT(obj[y_start+y:y_start+y+img_size, x_start+x:x_start+x+img_size]) # Estimated image is IFT of cropped spectrum at the shifted center
-                error = np.sum(np.abs(img_est - img)**2) # Error between estimated and measured image
+                estimated_image = IFT(obj[y_start+y:y_start+y+img_size, x_start+x:x_start+x+img_size]) # Estimated image is IFT of cropped spectrum at the shifted center
+                error = np.sum(np.abs(estimated_image - img)**2) # Error between estimated and measured image
                 error_heatmap[(subrange_size // 2 - y), (x + subrange_size // 2)] = error # Add error to heatmap (convert from cartesian to image coords)
        
                 # We are looking for the jiggle (x,y) that minimises the error 
@@ -270,8 +279,8 @@ def update_LED_positions_fast(obj,img,kx,ky,img_size,obj_center,image_number,sub
         
     return kx,ky  
 
-# Reconstruct object and pupil function using Quasi Newton algorithm
-def reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes):
+# Reconstruct object and pupil function from series of low res images
+def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
     # Inputs: 
     # images; low res image array data, in order taken
     # kx,ky; location of LEDs in Fourier domain, in order of images taken
@@ -281,15 +290,16 @@ def reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes):
     # fig, axes; for plotting
     
     # Returns: 
-    # rec_obj; recovered object
-    # rec_pupil; recovered pupil function
+    # IFT(obj); recovered object
+    # pupil; recovered pupil function
     # kx,ky; updated LED positions (or same as input if no LED correction)
     
     # Unpack options
-    alpha = options['alpha'] # <10, DOES MAKE DIFFERENCE
-    beta = options['beta'] # Not important
+    alpha = options['alpha'] # Regularisation for object update
+    beta = options['beta'] # Regularisation for pupil update
     max_iter = options['max_iter'] # Number of iterations to run algorithm (1 iteration uses all images)
     plot_mode = options['plot_mode'] # If using .py use 0,1. For notebook use 2,3
+    update_method = options['update_method'] # 1 for QN, 2 for EPRY (alpha beta need to be changed accordingly)
     LED_correction = options['LED_correction'] # Do correction for kx,ky - LED coordinates
     
     # Other parameters
@@ -300,10 +310,12 @@ def reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes):
     pupil_binary = np.copy(pupil) # Original pupil function (binary mask)
     pupil = pupil.astype('complex64') # Pupil function for updating needs to be complex   
     update_size = np.zeros(num_images) # To monitor object update size (can spot instability numerically)
+    quality = np.zeros(num_images)
     
     # Main loop
     for iter in range(max_iter):
-        for i in range(num_images): # For each image in data set   
+        for i in range(num_images): # For each image in data set  
+            # Sign of kx and ky can be swapped and resulting reconstruction is same (symmetry) 
             x_start = int(obj_center + kx[i] - img_size//2) # For cropping object spectrum
             y_start = int(obj_center - ky[i] - img_size//2)  
             
@@ -313,25 +325,41 @@ def reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes):
             # Measured image amplitude
             img = np.sqrt(images[:,:,i])
             
-            # Estimated image amplitude (complex)
-            img_est = IFT(object_cropped)
-            # img_est = IFT(object_cropped * pupil) # Why doesn't this work?
+            # Estimated image in Fourier domain
+            # estimated_image = np.copy(object_cropped) # Cheating but works
+            estimated_image = object_cropped * pupil # Correct method
             
             # The update image (in Fourier domain) is composed of the magnitude of the measured image, the phase of the estimated image
-            # and also the spectrum of the estimated image is subtracted
-            update_image = FT(img*np.exp(1j*np.angle(img_est))) - FT(img_est)
-        
-            # Object update
-            numerator = np.abs(pupil) * np.conj(pupil) * update_image
-            denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
-            object_update = numerator / denominator
-            object_cropped += object_update # Update cropped region
+            # and also the estimated image spectrum is subtracted
+            update_image = FT(img*np.exp(1j*np.angle(IFT(estimated_image)))) - estimated_image
+            
+            # Quasi-Newton object and pupil updates
+            if update_method == 1:
+                # Object update QN
+                numerator = np.abs(pupil) * np.conj(pupil) * update_image
+                denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
+                object_update = numerator / denominator
+                object_cropped += object_update # Update cropped region
 
-            # Pupil update
-            numerator = np.abs(object_cropped) * np.conj(object_cropped) * update_image * pupil_binary
-            denominator = np.max(np.abs(obj)) * (np.abs(object_cropped)**2 + beta)
-            pupil_update = numerator / denominator
-            pupil += pupil_update
+                # Pupil update QN
+                numerator = np.abs(object_cropped) * np.conj(object_cropped) * update_image * pupil_binary
+                denominator = np.max(np.abs(obj)) * (np.abs(object_cropped)**2 + beta)
+                pupil_update = numerator / denominator
+                pupil += pupil_update
+            
+            # Object and pupil updates from EPRY paper    
+            elif update_method == 2:
+                # Object update EPRY
+                numerator = np.conj(pupil) * update_image
+                denominator = np.max(np.abs(pupil))**2
+                object_update = numerator / denominator
+                object_cropped += alpha * object_update # Add to main spectrum with weight alpha
+                
+                # Pupil update EPRY
+                numerator = np.conj(object_cropped) * update_image * pupil_binary
+                denominator = np.max(np.abs(object_cropped))**2
+                pupil_update = numerator / denominator
+                pupil += beta * pupil_update # Update pupil with weight beta
             
             update_size[i] = np.mean(np.abs(object_update)) # To check instability
       
@@ -343,7 +371,7 @@ def reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes):
                 
             # Plot every image
             if plot_mode == 2:
-                plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size) # Plotting for notebook
+                plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size,quality) # Plotting for notebook
         
         # Status message
         progress = int((iter+1)/max_iter * 100)
@@ -354,191 +382,7 @@ def reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes):
         if plot_mode == 1:
             plot_py(fig,axes,obj) # plotting for main.py 
         elif plot_mode == 3:
-            plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size) # Plotting for notebook
-    
-    print('\n Reconstruction Done!') # Write to new line
-
-    return IFT(obj),pupil,kx,ky
-
-# V1 test
-def reconstruct_V1_test(images, kx, ky, obj, pupil, options, fig, axes):
-    # Inputs: 
-    # images; low res image array data, in order taken
-    # kx,ky; location of LEDs in Fourier domain, in order of images taken
-    # obj; initial estimate for object in frequency domain
-    # pupil; initial pupil function
-    # options; alpha, beta (regularisation), max_iter, plotting, LED_correction
-    # fig, axes; for plotting
-    
-    # Returns: 
-    # rec_obj; recovered object
-    # rec_pupil; recovered pupil function
-    # kx,ky; updated LED positions (or same as input if no LED correction)
-    
-    # Unpack options
-    alpha = options['alpha'] # <10, DOES MAKE DIFFERENCE
-    beta = options['beta'] # Not important
-    max_iter = options['max_iter'] # Number of iterations to run algorithm (1 iteration uses all images)
-    plot_mode = options['plot_mode'] # If using .py use 0,1. For notebook use 2,3
-    LED_correction = options['LED_correction'] # Do correction for kx,ky - LED coordinates
-    
-    # Other parameters
-    img_size = images.shape[0] # Square, same size as pupil function
-    num_images = images.shape[2]
-    obj_size = obj.shape[0] # Square
-    obj_center = obj_size // 2 # Center of object (used for inserting spectra in correct place)
-    pupil_binary = np.copy(pupil) # Original pupil function (binary mask)
-    pupil = pupil.astype('complex64') # Pupil function for updating needs to be complex   
-    update_size = np.zeros(num_images) # To monitor object update size (can spot instability numerically)
-    
-    # Main loop
-    for iter in range(max_iter):
-        for i in range(num_images): # For each image in data set   
-            x_start = int(obj_center + kx[i] - img_size//2) # For cropping object spectrum
-            y_start = int(obj_center - ky[i] - img_size//2)  
-            
-            # The relevant part of object spectrum to update
-            object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size] # Updates to object_cropped will directly modify main spectrum
-            # object_cropped = np.copy(obj[y_start:y_start+img_size, x_start:x_start+img_size]) # Create copy but don't apply pupil
-            # object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size] * pupil_binary # Creates new array due to * operation
-            
-            # Measured image amplitude
-            img = np.sqrt(images[:,:,i])
-            
-            # Estimated image amplitude from cropped object and current pupil (complex)
-            img_est = IFT(object_cropped)
-            # img_est = IFT(object_cropped * pupil) # Causes instability but don't know why
-            
-            # The update image (in Fourier domain) is composed of the magnitude of the measured image, the phase of the estimated image
-            # and also the spectrum of the estimated image is subtracted
-            update_image = FT(img*np.exp(1j*np.angle(img_est))) - FT(img_est)
-        
-            # Object update
-            numerator = np.abs(pupil) * np.conj(pupil) * update_image
-            denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
-            object_update = numerator / denominator
-            object_cropped += object_update
-            # obj[y_start:y_start+img_size, x_start:x_start+img_size] = np.copy(object_cropped)
-
-            # Pupil update
-            numerator = np.abs(object_cropped) * np.conj(object_cropped) * update_image * pupil_binary
-            denominator = np.max(np.abs(obj)) * (np.abs(object_cropped)**2 + beta)
-            pupil_update = numerator / denominator
-            pupil += pupil_update
-           
-            update_size[i] = np.mean(np.abs(object_update)) # To check instability
-      
-            # LED position (kx,ky) correction for image we just used
-            if LED_correction:
-                kx_new,ky_new = update_LED_positions_accurate(obj,img,kx[i],ky[i],img_size,obj_center,i)
-                kx[i] = kx_new # Updated LED positions
-                ky[i] = ky_new
-                
-            # Plot every image
-            if plot_mode == 2:
-                plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size) # Plotting for notebook
-        
-        # Status message
-        progress = int((iter+1)/max_iter * 100)
-        sys.stdout.write(f'\r Reconstruction Progress: {progress}%') # Write to same line
-        sys.stdout.flush()
-        
-        # Plot every iteration
-        if plot_mode == 1:
-            plot_py(fig,axes,obj) # plotting for main.py 
-        elif plot_mode == 3:
-            plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size) # Plotting for notebook
-    
-    print('\n Reconstruction Done!') # Write to new line
-
-    return IFT(obj),pupil,kx,ky
-
-# EPRY algorithm
-def reconstruct_V2(images, kx, ky, obj, pupil, options, fig, axes):
-    # Inputs: 
-    # images; low res image array data, in order taken
-    # kx,ky; location of LEDs in Fourier domain, in order of images taken
-    # obj; initial estimate for object in frequency domain
-    # pupil; initial pupil function
-    # options; alpha, beta (regularisation), max_iter, plotting, quality_threshold
-    # fig, axes; for plotting
-    
-    # Returns: 
-    # rec_obj; recovered object
-    # rec_pupil; recovered pupil function
-    # kx,ky; updated LED positions (or same as input if no LED correction)
-    
-    # Unpack options
-    alpha = options['alpha'] # <10, DOES MAKE DIFFERENCE
-    beta = options['beta'] # Not important
-    max_iter = options['max_iter'] # Number of iterations to run algorithm (1 iteration uses all images)
-    plot_mode = options['plot_mode'] # If using .py use 0,1. For notebook use 2,3
-    LED_correction = options['LED_correction'] # Do correction for kx,ky - LED coordinates
-    
-    # Other parameters
-    img_size = images.shape[0] # Square, same size as pupil function
-    num_images = images.shape[2]
-    obj_size = obj.shape[0] # Square
-    obj_center = obj_size // 2 # Center of object (used for inserting spectra in correct place)
-    pupil_binary = np.copy(pupil) # Original pupil function (binary mask)
-    pupil = pupil.astype('complex64') # Pupil function for updating needs to be complex 
-        
-    update_size = np.zeros(num_images) # To monitor object update size (can spot instability numerically)
-
-    # Main loop
-    for iter in range(max_iter):
-        for i in range(num_images): # For each image in data set   
-            x_start = int(obj_center + kx[i] - img_size//2) # For cropping object spectrum
-            y_start = int(obj_center - ky[i] - img_size//2)  
-            
-            # Define variables for object and pupil updating  
-                 
-            # The relevant part of object spectrum to update
-            object_update = np.copy(obj[y_start:y_start+img_size, x_start:x_start+img_size])
-             
-            # Measured image amplitude
-            img = np.sqrt(images[:,:,i])
-            
-            # Estimated image amplitude from object (complex)
-            img_est = IFT(object_update)
-            
-            # The update image (in Fourier domain) is composed of the magnitude of the measured image, the phase of the estimated image
-            # and also the spectrum of the estimated image is subtracted
-            update_image = FT(img*np.exp(1j*np.angle(img_est))) - FT(img_est)
-            
-            # Object update
-            numerator = np.abs(pupil) * np.conj(pupil) * update_image
-            denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
-            object_update = numerator / denominator
-            obj[y_start:y_start+img_size, x_start:x_start+img_size] += object_update # Add to main spectrum
-            update_size[i] = np.mean(np.abs(object_update)) # To check instability 
-            
-            # Pupil update
-            numerator = np.abs(object_update) * np.conj(object_update) * update_image * pupil_binary
-            denominator = np.max(obj) * (np.abs(object_update)**2 + beta)
-            pupil_update = numerator / denominator
-            pupil += pupil_update
-      
-            # LED position (kx,ky) correction for image we just used
-            if LED_correction:
-                kx_new,ky_new = update_LED_positions_accurate(obj,img,kx[i],ky[i],img_size,obj_center,i)
-                kx[i] = kx_new # Updated LED positions
-                ky[i] = ky_new
-                
-            # Plot every image
-            if plot_mode == 2:
-                plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size) # Plotting for notebook
-        
-        # Status message
-        progress = int((iter+1)/max_iter * 100)
-        sys.stdout.write(f'\r Reconstruction Progress: {progress}%') # Write to same line
-        sys.stdout.flush()
-        
-        # Plot every iteration
-        if plot_mode == 1:
-            plot_py(fig,axes,obj) # plotting for main.py 
-        elif plot_mode == 3:
-            plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size) # Plotting for notebook
+            plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size,quality) # Plotting for notebook
     
     print('\n Reconstruction Done!') # Write to new line
 
