@@ -280,14 +280,15 @@ def update_LED_positions_fast(obj,img,kx,ky,img_size,obj_center,image_number,sub
     return kx,ky  
 
 # Reconstruct object and pupil function from series of low res images
-def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
+def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=None):
     # Inputs: 
     # images; low res image array data, in order taken
     # kx,ky; location of LEDs in Fourier domain, in order of images taken
     # obj; initial estimate for object in frequency domain
-    # pupil; initial pupil function
+    # pupil_binary; binary mask for low pass cutoff
     # options; alpha, beta (regularisation), max_iter, plotting, LED_correction
     # fig, axes; for plotting
+    # pupil; known initial pupil function (optional)
     
     # Returns: 
     # IFT(obj); recovered object
@@ -306,11 +307,13 @@ def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
     img_size = images.shape[0] # Square, same size as pupil function
     num_images = images.shape[2]
     obj_size = obj.shape[0] # Square
-    obj_center = obj_size // 2 # Center of object (used for inserting spectra in correct place)
-    pupil_binary = np.copy(pupil) # Original pupil function (binary mask)
-    pupil = pupil.astype('complex64') # Pupil function for updating needs to be complex   
+    obj_center = obj_size // 2 # Center of object (used for inserting spectra in correct place) 
     update_size = np.zeros(num_images) # To monitor object update size (can spot instability numerically)
     quality = np.zeros(num_images)
+    
+    if pupil is None:
+        pupil = np.copy(pupil_binary) # Start with binary mask if no pupil function passed
+    pupil = pupil.astype('complex64') # Pupil function for updating needs to be complex  
     
     # Main loop
     for iter in range(max_iter):
@@ -326,8 +329,8 @@ def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
             img = np.sqrt(images[:,:,i])
             
             # Estimated image in Fourier domain
-            # estimated_image = np.copy(object_cropped) # Cheating but works
-            estimated_image = object_cropped * pupil # Correct method
+            # estimated_image = np.copy(object_cropped) # Cheating but works (pseudo-ptychography)
+            estimated_image = object_cropped * pupil # Correct method (actual ptychography)
             
             # The update image (in Fourier domain) is composed of the magnitude of the measured image, the phase of the estimated image
             # and also the estimated image spectrum is subtracted
@@ -335,6 +338,9 @@ def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
             
             # Quasi-Newton object and pupil updates
             if update_method == 1:
+                # Momentum (less obvious)
+                # alpha = 0.5*(1+iter)
+                
                 # Object update QN
                 numerator = np.abs(pupil) * np.conj(pupil) * update_image
                 denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
@@ -349,6 +355,12 @@ def reconstruct(images, kx, ky, obj, pupil, options, fig, axes):
             
             # Object and pupil updates from EPRY paper    
             elif update_method == 2:
+                # Momentum
+                # alpha = 0.6*(1+iter) # These worked
+                # beta = 0.2*(1+iter)
+                alpha = 0.6*(1+iter)
+                beta = 0.2*(1+iter)
+                
                 # Object update EPRY
                 numerator = np.conj(pupil) * update_image
                 denominator = np.max(np.abs(pupil))**2
