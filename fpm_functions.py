@@ -81,14 +81,14 @@ def LED_spiral(n, x_offset=0, y_offset=0):
     return x_coords, y_coords
 
 # Find a suitable size of the object
-def calculate_object_size(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, PIX_SIZE):
+def calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, PIX_SIZE):
     
     sampling_size = 1/(img_size*PIX_SIZE) # Sampling size in x
     r = np.sqrt(2*(grid_size*LED_P*0.5)**2) # Max radius of LED from center
     led_na = r/(np.sqrt(r**2+LED2SAMPLE**2)) # Max NA of LED
     max_freq = led_na/WLENGTH + NA/WLENGTH # Maximum spacial frequency in x
     
-    return np.ceil(2*np.round(2*max_freq/sampling_size)/img_size)*img_size # obj_size will be a multiple of img_size
+    return np.ceil(2*np.round(2*max_freq/sampling_size)/img_size) # Upsampling ratio
 
 # Find the LED wavevectors (location of each image in Fourier domain)
 def calculate_wavevectors(x, y, LED2SAMPLE, WLENGTH, PIX_SIZE, img_size):
@@ -358,8 +358,8 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
                 # Momentum
                 # alpha = 0.6*(1+iter) # These worked
                 # beta = 0.2*(1+iter)
-                alpha = 0.6*(1+iter)
-                beta = 0.2*(1+iter)
+                # alpha = 0.6*(1+iter)
+                # beta = 0.2*(1+iter)
                 
                 # Object update EPRY
                 numerator = np.conj(pupil) * update_image

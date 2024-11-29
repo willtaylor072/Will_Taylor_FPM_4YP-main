@@ -229,10 +229,12 @@ f_sampling = 1/PIX_SIZE # Sampling frequency (based on sensor pixel size and mag
 x_abs = (x_coords - x_coords[0])*LED_P # x distances of LEDs from center LED
 y_abs = (y_coords - y_coords[0])*LED_P # y distances of LEDs from center LED
 
-# Size of object image (for given parameters upsampling is between 2 and 5 depending on grid_size)
+# Size of reconstructed object (upsampling is usually between 2 and 5 depending on grid_size)
 # Can do seperately x and y if image is not square
-obj_size = fpm.calculate_object_size(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, PIX_SIZE)
-print(f'Upsampling ratio: {obj_size/img_size}; Reconstructed Pixel Size: {int(1e9*PIX_SIZE/(obj_size/img_size))}nm')
+upsampling_ratio = fpm.calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, PIX_SIZE)
+# upsampling_ratio = 3 # Or can use a set value
+obj_size = upsampling_ratio * img_size
+print(f'Upsampling ratio: {upsampling_ratio}; Reconstructed Pixel Size: {int(1e9*PIX_SIZE/(upsampling_ratio))}nm')
 
 # Initial pupil function (binary mask)
 # Nyquist sampling criterion: sampling_ratio >2 -> oversampling, sampling_ratio <2 -> undersampling (aliasing may occur)
