@@ -13,21 +13,21 @@ import cv2
 # Display images in a grid
 def display_data(grid_size,data_folder='data/recent'):
 
-    x,y = LED_spiral(grid_size,x_offset=0,y_offset=1) # get the coordinates of LEDs
+    x,y = LED_spiral(grid_size) # Get the coordinates of LEDs
 
     fig, axes = plt.subplots(16, 16, figsize=(15,15))
     fig.subplots_adjust(hspace=0.1, wspace=0.1)
 
     for i in range(grid_size*grid_size):
         image = Image.open(os.path.join(data_folder,f'image_{i}.png'))
-        row = -y[i] -1
+        row = -y[i] - 1
         col = x[i]
         axes[row,col].imshow(image, cmap='gray')
         axes[row,col].axis('off')
     
 # Generate coordinates to turn on LEDs in a spiral pattern, moving right up left down right up left down....
-# 0,0 is bottom left LED when rotation is 135 degrees. Allow offsets to center the starting point with optical axis. 
-# N.b. If offsets are non zero, we can't use entire 16x16 LED array.
+# 0,0 is bottom left LED when rotation is 135 degrees. Can use offsets to center the starting point with optical axis. 
+# N.b. If offsets are non zero, we can't use entire 16x16 LED array - reccomended not to use offsets but just adjust wavevectors.
 def LED_spiral(n, x_offset=0, y_offset=0):
     
     # Initialize the arrays to store the x and y coordinates
@@ -81,24 +81,24 @@ def LED_spiral(n, x_offset=0, y_offset=0):
     return x_coords, y_coords
 
 # Find a suitable size of the object
-def calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, PIX_SIZE):
+def calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, sampling_size):
     
-    sampling_size = 1/(img_size*PIX_SIZE) # Sampling size in x
     r = np.sqrt(2*(grid_size*LED_P*0.5)**2) # Max radius of LED from center
     led_na = r/(np.sqrt(r**2+LED2SAMPLE**2)) # Max NA of LED
     max_freq = led_na/WLENGTH + NA/WLENGTH # Maximum spacial frequency in x
     
     return np.ceil(2*np.round(2*max_freq/sampling_size)/img_size) # Upsampling ratio
 
-# Find the LED wavevectors (location of each image in Fourier domain)
-def calculate_wavevectors(x, y, LED2SAMPLE, WLENGTH, PIX_SIZE, img_size):
+# Find the scaled LED wavevectors (for placing each low res image in Fourier domain)
+def calculate_wavevectors(x, y, LED2SAMPLE, WLENGTH, sampling_size):
     
-    sampling_size = 1/(img_size*PIX_SIZE) # Sampling size in x
     kx = np.zeros(len(x)) # x components of wavevector for each LED illumination
     ky = np.zeros(len(x)) # y components
     for i in range(len(x)):
+        # Actual wavevectors are sin_theta/wavelength, but we calculate the scaled ones 
+        # so we can use them for indexing in the Fourier domain. 
         sin_thetax = x[i]/(np.sqrt(x[i]**2 + LED2SAMPLE**2))
-        kx[i] = sin_thetax/(WLENGTH*sampling_size)
+        kx[i] = sin_thetax/(WLENGTH*sampling_size) # Scaled wavevector is true wavevector / sampling_size
         
         sin_thetay = y[i]/(np.sqrt(y[i]**2 + LED2SAMPLE**2))
         ky[i] = sin_thetay/(WLENGTH*sampling_size)
@@ -164,7 +164,7 @@ def plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,it
     
 # Update kx and ky for the current image by finding the kx and ky that minimise error between image estimate
 # and current low res image. search_range should be odd
-def update_LED_positions_accurate(obj,img,kx,ky,img_size,obj_center,image_number,search_range=5):
+def update_LED_positions_accurate(obj,img,pupil,kx,ky,img_size,obj_center,image_number,search_range=10):
     
     # Easier to crop obj using x_start and y_start 
     x_start = int(obj_center + kx - img_size//2)
@@ -175,13 +175,12 @@ def update_LED_positions_accurate(obj,img,kx,ky,img_size,obj_center,image_number
     y_offsets = range(-(search_range // 2), (search_range // 2) + 1)
 
     min_error = float('inf') # Min error for this iteration
-    # error_heatmap = np.zeros((search_range,search_range)) # For visualising algorithm
     
     # Find error between image and estimated image, where we offset the object crop region slightly to find estimated image
     for x in x_offsets:
         for y in y_offsets:       
-            estimated_image = IFT(obj[y_start+y:y_start+y+img_size, x_start+x:x_start+x+img_size]) # Estimated image is IFT of cropped spectrum at the shifted center
-            error = np.sum(np.abs(estimated_image - img)**2) # Error between estimated and measured image
+            estimated_image = IFT(obj[y_start+y:y_start+y+img_size, x_start+x:x_start+x+img_size]*pupil) # Estimated image defined as usual (but with offsetted spectrum)
+            error = np.mean((np.abs(estimated_image) - img)**2) # MSE between estimated and measured image
             # error_heatmap[(search_range // 2 - y), (x + search_range // 2)] = error # Add error to heatmap (convert from cartesian to image coords)
     
             # Track the smallest error position
@@ -191,6 +190,7 @@ def update_LED_positions_accurate(obj,img,kx,ky,img_size,obj_center,image_number
                 optimal_y = y
             
     # # Plot the heatmap for a specific image number
+    # error_heatmap = np.zeros((search_range,search_range)) # For visualising algorithm
     # if image_number == 15:  # Image number to inspect correction algorithm
     #     plt.imshow(error_heatmap, cmap='hot', extent=[x_offsets.start, x_offsets.stop - 1, y_offsets.start, y_offsets.stop - 1])
     #     plt.colorbar(label='Error')
@@ -208,6 +208,7 @@ def update_LED_positions_accurate(obj,img,kx,ky,img_size,obj_center,image_number
     # Apply the optimal offsets to the crop region
     x_start += optimal_x 
     y_start += optimal_y
+    
     # We have optimal x_start and y_start so just rearrange for kx,ky using below relations
     # x_start = int(obj_center + kx[i] - img_size//2)
     # y_start = int(obj_center - ky[i] - img_size//2)  
@@ -218,10 +219,9 @@ def update_LED_positions_accurate(obj,img,kx,ky,img_size,obj_center,image_number
 
 # Modification of accurate algorithm to use a subrange to search for minimum error LED position.
 # CURRENTLY DOES NOT WORK - landscape is not smooth, so we don't converge using subranges
-def update_LED_positions_fast(obj,img,kx,ky,img_size,obj_center,image_number,subrange_size=5):
+def update_LED_positions_fast(obj,img,pupil,kx,ky,img_size,obj_center,image_number,subrange_size=5):
     
     iteration_limit = 10 # Max number of re-center and search iterations
-    found_min = False # If we don't find a minimum within iteration_limit then don't update kx,ky
     
     # Easier to crop obj using x_start and y_start 
     x_start = int(obj_center + kx - img_size//2)
@@ -233,14 +233,14 @@ def update_LED_positions_fast(obj,img,kx,ky,img_size,obj_center,image_number,sub
     
     for _ in range(iteration_limit):
         min_error = float('inf') # Min error for this iteration
-        error_heatmap = np.zeros((subrange_size,subrange_size)) # For visualising algorithm
+        # error_heatmap = np.zeros((subrange_size,subrange_size)) # For visualising algorithm
         
         # Find error between image and estimated image, where we offset the object crop region slightly to find estimated image
         for x in x_offsets: 
             for y in y_offsets:       
-                estimated_image = IFT(obj[y_start+y:y_start+y+img_size, x_start+x:x_start+x+img_size]) # Estimated image is IFT of cropped spectrum at the shifted center
-                error = np.sum(np.abs(estimated_image - img)**2) # Error between estimated and measured image
-                error_heatmap[(subrange_size // 2 - y), (x + subrange_size // 2)] = error # Add error to heatmap (convert from cartesian to image coords)
+                estimated_image = IFT(obj[y_start+y:y_start+y+img_size, x_start+x:x_start+x+img_size]*pupil) # Estimated image is IFT of cropped spectrum at the shifted center
+                error = np.mean((np.abs(estimated_image) - img)**2) # MSE between estimated and measured image
+                # error_heatmap[(subrange_size // 2 - y), (x + subrange_size // 2)] = error # Add error to heatmap (convert from cartesian to image coords)
        
                 # We are looking for the jiggle (x,y) that minimises the error 
                 if error < min_error:
@@ -273,9 +273,8 @@ def update_LED_positions_fast(obj,img,kx,ky,img_size,obj_center,image_number,sub
     # We have optimal x_start and y_start so just rearrange for kx,ky using below relations
     # x_start = int(obj_center + kx[i] - img_size//2)
     # y_start = int(obj_center - ky[i] - img_size//2)  
-    if found_min: # Only update kx,ky if we find a minimum within iteration_limit 
-        kx = x_start - obj_center + img_size//2
-        ky = obj_center - img_size//2 - y_start
+    kx = x_start - obj_center + img_size//2
+    ky = obj_center - img_size//2 - y_start
         
     return kx,ky  
 
@@ -318,7 +317,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
     # Main loop
     for iter in range(max_iter):
         for i in range(num_images): # For each image in data set  
-            # Sign of kx and ky can be swapped and resulting reconstruction is same (symmetry) 
+            # Signs of kx and ky can be swapped and resulting reconstruction is same (symmetry) 
             x_start = int(obj_center + kx[i] - img_size//2) # For cropping object spectrum
             y_start = int(obj_center - ky[i] - img_size//2)  
             
@@ -328,18 +327,17 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             # Measured image amplitude
             img = np.sqrt(images[:,:,i])
             
-            # Estimated image in Fourier domain
+            # Estimated image in Fourier domain, i.e. simulated exit wave throgh sample
             # estimated_image = np.copy(object_cropped) # Cheating but works (pseudo-ptychography)
             estimated_image = object_cropped * pupil # Correct method (actual ptychography)
             
-            # The update image (in Fourier domain) is composed of the magnitude of the measured image, the phase of the estimated image
-            # and also the estimated image spectrum is subtracted
-            update_image = FT(img*np.exp(1j*np.angle(IFT(estimated_image)))) - estimated_image
-            
-            # Quasi-Newton object and pupil updates
             if update_method == 1:
-                # Momentum (less obvious)
-                # alpha = 0.5*(1+iter)
+                # Momentum can still be used (less obvious)
+                # alpha = 0.2*(1+iter)
+                
+                # The update image (in Fourier domain) is composed of the magnitude of the measured image, 
+                # the phase of the estimated image and also the estimated image spectrum is subtracted
+                update_image = FT(img*np.exp(1j*np.angle(IFT(estimated_image)))) - estimated_image
                 
                 # Object update QN
                 numerator = np.abs(pupil) * np.conj(pupil) * update_image
@@ -353,13 +351,17 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
                 pupil_update = numerator / denominator
                 pupil += pupil_update
             
-            # Object and pupil updates from EPRY paper    
+            # ePIE algorithm (extened ptychographic iterative engine)   
             elif update_method == 2:
                 # Momentum
-                # alpha = 0.6*(1+iter) # These worked
+                # alpha = 0.2*(1+iter) # These worked
                 # beta = 0.2*(1+iter)
                 # alpha = 0.6*(1+iter)
                 # beta = 0.2*(1+iter)
+                
+                # Update image formed with magnitude of measured image, normalised by estimated image
+                # and again spectrum of estimated image is removed
+                update_image = FT(img*IFT(estimated_image)/np.abs(IFT(estimated_image))) - estimated_image
                 
                 # Object update EPRY
                 numerator = np.conj(pupil) * update_image
@@ -375,9 +377,15 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             
             update_size[i] = np.mean(np.abs(object_update)) # To check instability
       
-            # LED position (kx,ky) correction for image we just used
-            if LED_correction:
-                kx_new,ky_new = update_LED_positions_accurate(obj,img,kx[i],ky[i],img_size,obj_center,i)
+            # LED position (kx,ky) correction for image we just used, algorithm 1
+            if LED_correction == 1:
+                kx_new,ky_new = update_LED_positions_accurate(obj,img,pupil,kx[i],ky[i],img_size,obj_center,i)
+                kx[i] = kx_new # Updated LED positions
+                ky[i] = ky_new
+            
+            # Algorithm 2    
+            if LED_correction == 2:
+                kx_new,ky_new = update_LED_positions_fast(obj,img,pupil,kx[i],ky[i],img_size,obj_center,i)
                 kx[i] = kx_new # Updated LED positions
                 ky[i] = ky_new
                 
@@ -392,7 +400,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
         
         # Plot every iteration
         if plot_mode == 1:
-            plot_py(fig,axes,obj) # plotting for main.py 
+            plot_py(fig,axes,obj) # Plotting for main.py 
         elif plot_mode == 3:
             plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size,quality) # Plotting for notebook
     
