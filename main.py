@@ -22,16 +22,17 @@ data_folder = 'data/recent' # For saving data images (diagnostics only)
 results_folder = 'results/recent' # For saving results
 
 # Imaging parameters
-grid_size = 16 # 1->16
+grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
 img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
 preview_exposure = 80000 # In microseconds for preview
 brightfield_exposure = 50000  # In microseconds for brightfield
 fpm_exposure = 500000  # In microseconds for FPM image capture
-LED_delay = 0 # In seconds for pause between FPM images to switch LED
+LED_delay = 0.2 # In seconds for pause between FPM images to switch LED
+x_coords,y_coords = fpm.LED_spiral(grid_size,x_offset=1,y_offset=1) # LED sequence (originally started with 7,7 but due to misalignment now start with 8,8)
 
 # Set parameters for reconstruction algorithm
 options = {
-    'max_iter': 5, # Number of iterations
+    'max_iter': 1, # Number of iterations
     'alpha': 1, # Regularisation parameter for object update
     'beta': 1, # Regularisation parameter for pupil update
     'plot_mode': 1, # 0, plot only at end; 1, plot every iteration
@@ -45,8 +46,9 @@ LED_P = 3.3 # LED pitch, mm
 NA = 0.1 # Objective numerical aperture
 PIX_SIZE = 1025e-9 # Pixel size on object plane, m
 WLENGTH = 550e-9 # Central wavelength of LED light, m
-x_offset = -3.3 # x distance from first LED to optical axis, mm (+ve if first LED is to right of optical axis)
-y_offset = 3.3 # y distance from first LED to optical axis, mm (+ve if first LED is below optical axis)
+# x_initial = -3.3 # x distance from first LED to optical axis, mm (+ve if first LED is to right of optical axis)
+# y_initial = 3.3 # y distance from first LED to optical axis, mm (+ve if first LED is below optical axis)
+x_initial = y_initial = 0 # We adjust the sequence instead so these are close to zero (first LED close to optical axis)
 
 # Miscelaneous 
 
@@ -193,10 +195,8 @@ axes[1].imshow(placeholder_cropped,cmap='gray') # Use placeholder from earlier s
 plt.draw()   
 plt.pause(0.1)  
 
-
 # Take FPM images
 images = np.zeros((img_size,img_size,num_images))  # np array to store grayscale arrays
-x_coords,y_coords = fpm.LED_spiral(grid_size) # LED sequence
 camera.set_controls({"ExposureTime": fpm_exposure})
 
 for i in range(num_images):
@@ -232,8 +232,8 @@ F_SAMPLING = 1/PIX_SIZE # Sampling frequency (based on sensor pixel size and mag
 SAMPLING_RATIO = F_SAMPLING / F_CUTOFF # Ensure above 2
 # print(f'Sampling ratio: {SAMPLING_RATIO}')
 sampling_size = 1/(img_size*PIX_SIZE) # Distance between discrete points in the Fourier domain (used to scale wavevectors for indexing)
-x_abs = (x_coords - x_coords[0]) * LED_P + x_offset # x distances of LEDs from center LED and optical axis, mm
-y_abs = (y_coords - y_coords[0]) * LED_P + y_offset # y distances
+x_abs = (x_coords - x_coords[0]) * LED_P + x_initial # x distances of LEDs from first LED and optical axis, mm
+y_abs = (y_coords - y_coords[0]) * LED_P + y_initial # y distances
 
 # Size of reconstructed image (for given parameters upsampling is between 2 and 5 depending on grid_size)
 # Can do seperately x and y if image is not square

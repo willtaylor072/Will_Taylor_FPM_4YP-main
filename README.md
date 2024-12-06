@@ -19,9 +19,8 @@ camera.close()
 KEY FINDINGS AND CONSIDERATIONS
 
 Central LED (first LED in sequence) should be close to optical axis. If it is not directly aligned with
-the optical axis (i.e. vertically through aperture of objective) then we need to use x_offset and y_offset 
-to adjust wavevectors accordingly (by adjusting x_abs and y_abs). Ideally we use LED correction to get most accurate wavevectors but this can take lots of time.
-To determine x and y offsets easiest method is to use fpm.display_data and compare central LED to center of brightfield (optical axis). 
+the optical axis (i.e. vertically through aperture of objective) then we need to use x_offset and y_offset
+within LED_spiral algorithm to fix. For each offset unit we reduce max grid size by 1. I.e. for 1,1 offset max grid size is 15.
 For consistancy use LED rotation of 135 degrees. 
 
 The path from the top of the objective to the camera lens must be covered in order to avoid ambient light from washing out the signal. 
