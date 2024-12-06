@@ -22,11 +22,11 @@ data_folder = 'data/recent' # For saving data images (diagnostics only)
 results_folder = 'results/recent' # For saving results
 
 # Imaging parameters
-grid_size = 5 # 1->16, recommend 4-8 for stability, time and performance balacnce
-img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
-preview_exposure = 50000 # In microseconds for preview
-brightfield_exposure = 80000  # In microseconds for brightfield
-fpm_exposure = 700000  # In microseconds for FPM image capture
+grid_size = 5 # 1->16
+img_size = 100 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
+preview_exposure = 30000 # In microseconds for preview
+brightfield_exposure = 40000  # In microseconds for brightfield
+fpm_exposure = 300000  # In microseconds for FPM image capture
 LED_delay = 0.5 # In seconds for pause between FPM images to switch LED
 
 # Set parameters for reconstruction algorithm
@@ -34,17 +34,20 @@ options = {
     'max_iter': 5, # Number of iterations
     'alpha': 1, # Regularisation parameter for object update, <10
     'beta': 1, # Regularisation parameter for pupil update, >1
-    'plot_mode': 1, # 0, only plot object after reconstruction; 1, plot object during reconstruction (at each iteration)
-    'LED_correction': False, # Adjust kx and ky values to their optimal positions
+    'plot_mode': 3, # 0, off; 2, plot every image; 3, plot every iteration (notebook version)
+    'LED_correction': 2, # 0, off; 1, accurate; 2, fast. Update wavevectors during reconstruction 
+    'update_method': 2, # 1, Quasi-Newton object and pupil updates; 2, ePIE object and pupil updates (faster)
 }
 
 # Optical system parameters
-LED2SAMPLE = 54 # Distance from LED array to the sample, 54mm (larger distance leads to closer overlapping Fourier circles, optimal 40-60%)
+LED2SAMPLE = 80 # Distance from LED array to the sample, 80mm (larger distance leads to closer overlapping Fourier circles)
 LED_P = 3.3 # LED pitch, mm
-N_GLASS = 1.52 # Glass refractive index
-NA = 0.1 # Objective numerical apature
-PIX_SIZE = 1.09e-6 # Pixel size on object plane, m, 1.09um for 3D printed microscope (directly measured with USAF slide)
+# N_GLASS = 1.52 # Glass refractive index, not used in this model
+NA = 0.1 # Objective numerical aperture
+PIX_SIZE = 1090e-9 # Pixel size on object plane, m, 1090nm for 3D printed microscope (directly measured)
 WLENGTH = 550e-9 # Central wavelength of LED light, m
+x_offset = -1.6 # x distance from central LED to optical axis, mm (+ve if central LED is to right of optical axis)
+y_offset = 3.3 # y distance from central LED to optical axis, mm (+ve if central LED is below optical axis)
 
 # Miscelaneous 
 
@@ -224,44 +227,41 @@ camera.close()
 # Reconstruction
 
 # Derived variables
-f_cutoff = 2*NA/WLENGTH # Highest spatial frequency we can resolve in the optical system due to diffraction, lp/m
-f_sampling = 1/PIX_SIZE # Sampling frequency (based on sensor pixel size and magnification), lp/m
-x_abs = (x_coords - x_coords[0])*LED_P # x distances of LEDs from center LED
-y_abs = (y_coords - y_coords[0])*LED_P # y distances of LEDs from center LED
+F_CUTOFF = 2*NA/WLENGTH # Highest spatial frequency we can resolve in the optical system due to diffraction, lp/m
+F_SAMPLING = 1/PIX_SIZE # Sampling frequency (based on sensor pixel size and magnification), lp/m
+# Nyquist sampling criterion: sampling_ratio >2 -> oversampling (good), sampling_ratio <2 -> undersampling (aliasing may occur)
+SAMPLING_RATIO = F_SAMPLING / F_CUTOFF # Ensure above 2
+# print(f'Sampling ratio: {SAMPLING_RATIO}')
+sampling_size = 1/(img_size*PIX_SIZE) # Distance between discrete points in the Fourier domain (used to scale wavevectors for indexing)
+x_abs = (x_coords - x_coords[0]) * LED_P + x_offset # x distances of LEDs from center LED and optical axis, mm
+y_abs = (y_coords - y_coords[0]) * LED_P + y_offset # y distances
 
-# Size of reconstructed object (upsampling is usually between 2 and 5 depending on grid_size)
+# Size of reconstructed image (for given parameters upsampling is between 2 and 5 depending on grid_size)
 # Can do seperately x and y if image is not square
-upsampling_ratio = fpm.calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, PIX_SIZE)
+upsampling_ratio = fpm.calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, sampling_size)
 # upsampling_ratio = 3 # Or can use a set value
 obj_size = upsampling_ratio * img_size
 print(f'Upsampling ratio: {upsampling_ratio}; Reconstructed Pixel Size: {int(1e9*PIX_SIZE/(upsampling_ratio))}nm')
 
+# LED wavevectors - scaled for use in Fourier domain. To get true wavevectors multiply by sampling size
+kx,ky = fpm.calculate_wavevectors(x_abs, y_abs, LED2SAMPLE, WLENGTH, sampling_size)
+
 # Initial pupil function (binary mask)
-# Nyquist sampling criterion: sampling_ratio >2 -> oversampling, sampling_ratio <2 -> undersampling (aliasing may occur)
-sampling_ratio = f_sampling / f_cutoff 
 # x,y is our normalised frequency domain for the images, cutoff frequency = 1 (both x and y)
-x,y = np.meshgrid(np.linspace(-sampling_ratio,sampling_ratio,img_size), np.linspace(-sampling_ratio,sampling_ratio,img_size))
+x,y = np.meshgrid(np.linspace(-SAMPLING_RATIO,SAMPLING_RATIO,img_size), np.linspace(-SAMPLING_RATIO,SAMPLING_RATIO,img_size))
 theta,r = np.arctan2(y,x), np.sqrt(x**2 + y**2) # Polar coordinates
-# radius of pupil in pixels = (1/sampling_ratio) * (img_size/2)
-pupil = r<1 # Binary mask for frequencies below cutoff frequency (higher frequencies cannot be resolved due to diffraction)
+pupil_radius = (1/SAMPLING_RATIO) * (img_size/2) # In pixels
+pupil_binary = r<1 # Binary mask for frequencies below cutoff frequency (higher frequencies cannot be resolved due to diffraction)
 
 # Initial object estimate (using first image)
 img = np.sqrt(images[:,:,0]) # Amplitude of central image
 F_img = fpm.FT(img) # Fourier transformed image (with shift)
-F_img = F_img * pupil # Apply pupil function
+F_img = F_img * pupil_binary # Apply pupil function
 pad_width = int((obj_size - img_size) / 2) # Padding to make correct size
 obj = np.pad(F_img,pad_width,'constant',constant_values=0) # Initial object in frequency domain
 
-# Reconstruction with calculated kx and ky (quickstart)
-kx,ky = fpm.calculate_wavevectors(x_abs, y_abs, LED2SAMPLE, WLENGTH, PIX_SIZE, img_size)
-rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct_V1(images, kx, ky, obj, pupil, options, fig, axes)
-# np.save(os.path.join(data_path,'kx_updated'),kx_updated)
-# np.save(os.path.join(data_path,'ky_updated'),ky_updated)
-
-# # Reconstruction with loaded / optimal kx and ky (optimal values depend on crop size)
-# kx = np.load(os.path.join(data_path,'kx_updated.npy'))
-# ky = np.load(os.path.join(data_path,'ky_updated.npy'))
-# rec_obj,rec_pupil,_,_ = reconstruct(images, kx, ky, obj, pupil, options)
+# Do reconstruction (main code)
+rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=None)
 
 # Keep plot open
 plt.ioff()

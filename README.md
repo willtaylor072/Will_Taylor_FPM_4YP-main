@@ -22,8 +22,13 @@ Central LED (first LED in sequence) should be close to optical axis. If it is no
 the optical axis (i.e. vertically through aperture of objective) then we need to use x_offset and y_offset 
 to adjust wavevectors accordingly (by adjusting x_abs and y_abs). Ideally we use LED correction to get most accurate wavevectors but this can take lots of time.
 
+The path from the top of the objective to the camera lens must be covered in order to avoid ambient light from washing out the signal. 
+Adjusting the z stage to focus will slightly move the image (due to tilting). 
+
 In the fpm.reconstruction algorithm we can cheat to reconstruct an image
 estimated_image = np.copy(object_cropped) # Cheating but works (pseudo-ptychography)
 estimated_image = object_cropped * pupil # Correct method (actual ptychography)
 
 Momentum may be used to speed up recovery process.
+
+System parameters for V2 microscope:
