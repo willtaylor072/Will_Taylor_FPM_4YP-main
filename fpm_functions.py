@@ -354,10 +354,8 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             # ePIE algorithm (extened ptychographic iterative engine)   
             elif update_method == 2:
                 # Momentum
-                # alpha = 0.2*(1+iter) # These worked
-                # beta = 0.2*(1+iter)
-                # alpha = 0.6*(1+iter)
-                # beta = 0.2*(1+iter)
+                # alpha = 0.4*(1+iter)
+                # beta = 0.4*(1+iter)
                 
                 # Update image formed with magnitude of measured image, normalised by estimated image
                 # and again spectrum of estimated image is removed
