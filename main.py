@@ -22,32 +22,31 @@ data_folder = 'data/recent' # For saving data images (diagnostics only)
 results_folder = 'results/recent' # For saving results
 
 # Imaging parameters
-grid_size = 5 # 1->16
-img_size = 100 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
-preview_exposure = 30000 # In microseconds for preview
-brightfield_exposure = 40000  # In microseconds for brightfield
-fpm_exposure = 300000  # In microseconds for FPM image capture
-LED_delay = 0.5 # In seconds for pause between FPM images to switch LED
+grid_size = 16 # 1->16
+img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
+preview_exposure = 80000 # In microseconds for preview
+brightfield_exposure = 50000  # In microseconds for brightfield
+fpm_exposure = 500000  # In microseconds for FPM image capture
+LED_delay = 0 # In seconds for pause between FPM images to switch LED
 
 # Set parameters for reconstruction algorithm
 options = {
     'max_iter': 5, # Number of iterations
-    'alpha': 1, # Regularisation parameter for object update, <10
-    'beta': 1, # Regularisation parameter for pupil update, >1
-    'plot_mode': 3, # 0, off; 2, plot every image; 3, plot every iteration (notebook version)
-    'LED_correction': 2, # 0, off; 1, accurate; 2, fast. Update wavevectors during reconstruction 
+    'alpha': 1, # Regularisation parameter for object update
+    'beta': 1, # Regularisation parameter for pupil update
+    'plot_mode': 1, # 0, plot only at end; 1, plot every iteration
+    'LED_correction': 0, # 0, off; 1, accurate; 2, fast. Update wavevectors during reconstruction 
     'update_method': 2, # 1, Quasi-Newton object and pupil updates; 2, ePIE object and pupil updates (faster)
 }
 
 # Optical system parameters
 LED2SAMPLE = 80 # Distance from LED array to the sample, 80mm (larger distance leads to closer overlapping Fourier circles)
 LED_P = 3.3 # LED pitch, mm
-# N_GLASS = 1.52 # Glass refractive index, not used in this model
 NA = 0.1 # Objective numerical aperture
-PIX_SIZE = 1090e-9 # Pixel size on object plane, m, 1090nm for 3D printed microscope (directly measured)
+PIX_SIZE = 1025e-9 # Pixel size on object plane, m
 WLENGTH = 550e-9 # Central wavelength of LED light, m
-x_offset = -1.6 # x distance from central LED to optical axis, mm (+ve if central LED is to right of optical axis)
-y_offset = 3.3 # y distance from central LED to optical axis, mm (+ve if central LED is below optical axis)
+x_offset = -3.3 # x distance from first LED to optical axis, mm (+ve if first LED is to right of optical axis)
+y_offset = 3.3 # y distance from first LED to optical axis, mm (+ve if first LED is below optical axis)
 
 # Miscelaneous 
 
@@ -197,7 +196,7 @@ plt.pause(0.1)
 
 # Take FPM images
 images = np.zeros((img_size,img_size,num_images))  # np array to store grayscale arrays
-x_coords,y_coords = fpm.LED_spiral(grid_size, x_offset=0, y_offset=1) # LED sequence (offset is important to align central LED to optical axis)
+x_coords,y_coords = fpm.LED_spiral(grid_size) # LED sequence
 camera.set_controls({"ExposureTime": fpm_exposure})
 
 for i in range(num_images):

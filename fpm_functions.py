@@ -317,8 +317,8 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
     # Main loop
     for iter in range(max_iter):
         for i in range(num_images): # For each image in data set  
-            # Signs of kx and ky can be swapped and resulting reconstruction is same (symmetry) 
-            x_start = int(obj_center + kx[i] - img_size//2) # For cropping object spectrum
+            # Determine object crop region
+            x_start = int(obj_center + kx[i] - img_size//2) 
             y_start = int(obj_center - ky[i] - img_size//2)  
             
             # The relevant part of object spectrum to update

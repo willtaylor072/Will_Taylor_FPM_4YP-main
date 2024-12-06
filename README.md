@@ -33,11 +33,22 @@ estimated_image = object_cropped * pupil # Correct method (actual ptychography)
 
 Momentum may be used to speed up recovery process.
 
+Optical parameters (everything in data library uses V2):
+
 System parameters for V2 microscope:
 LED2SAMPLE = 80 # Distance from LED array to the sample, 54/80mm (larger distance leads to closer overlapping Fourier circles)
 LED_P = 3.3 # LED pitch, mm
 NA = 0.1 # Objective numerical aperture
-PIX_SIZE = 1090e-9 # Pixel size on object plane, m, 1090nm for 3D printed microscope (directly measured)
+PIX_SIZE = 1025e-9 # Pixel size on object plane, m
 WLENGTH = 550e-9 # Central wavelength of LED light, m
 x_offset = -1*LED_P # x distance from central LED to optical axis, mm (+ve if central LED is to right of optical axis)
 y_offset = 1.5*LED_P # y distance from central LED to optical axis, mm (+ve if central LED is below optical axis)
+
+System parameters for V1 microscope:
+LED2SAMPLE = 54 # Distance from LED array to the sample, 54/80mm (larger distance leads to closer overlapping Fourier circles)
+LED_P = 3.3 # LED pitch, mm
+NA = 0.1 # Objective numerical aperture
+PIX_SIZE = 1090e-9 # Pixel size on object plane, m
+WLENGTH = 550e-9 # Central wavelength of LED light, m
+x_offset = -1*LED_P # x distance from central LED to optical axis, mm (+ve if central LED is to right of optical axis)
+y_offset = 1*LED_P # y distance from central LED to optical axis, mm (+ve if central LED is below optical axis)
