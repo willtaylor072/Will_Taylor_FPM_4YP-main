@@ -9,21 +9,6 @@ from PIL import Image
 import numpy as np
 from scipy.fft import fft2, ifft2, fftshift, ifftshift
 import cv2
-
-# Display images in a grid
-def display_data(grid_size,data_folder='data/recent'):
-
-    x,y = LED_spiral(grid_size) # Get the coordinates of LEDs
-
-    fig, axes = plt.subplots(16, 16, figsize=(15,15))
-    fig.subplots_adjust(hspace=0.1, wspace=0.1)
-
-    for i in range(grid_size*grid_size):
-        image = Image.open(os.path.join(data_folder,f'image_{i}.png'))
-        row = -y[i] - 1
-        col = x[i]
-        axes[row,col].imshow(image, cmap='gray')
-        axes[row,col].axis('off')
     
 # Generate coordinates to turn on LEDs in a spiral pattern, moving right up left down right up left down....
 # 0,0 is bottom left LED when rotation is 135 degrees. Can use offsets to center the starting point with optical axis. 
@@ -372,6 +357,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
                 denominator = np.max(np.abs(object_cropped))**2
                 pupil_update = numerator / denominator
                 pupil += beta * pupil_update # Update pupil with weight beta
+                # pupil[pupil_binary] = np.exp(1j*np.angle(pupil[pupil_binary])) # Intensity constraint
             
             update_size[i] = np.mean(np.abs(object_update)) # To check instability
       
