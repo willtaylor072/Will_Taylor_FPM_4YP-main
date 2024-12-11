@@ -6,3 +6,6 @@ usaf_short
 
 usaf_red
 * 2.5s exposure red light
+
+usaf_dark
+* 0.8s exposure white light no ambient light at all

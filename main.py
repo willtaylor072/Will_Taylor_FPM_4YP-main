@@ -22,7 +22,7 @@ data_folder = 'data/recent' # For saving data images (diagnostics only)
 results_folder = 'results/recent' # For saving results
 
 # Imaging parameters
-grid_size = 5 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
+grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
 img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
 preview_exposure = 80000 # In microseconds for preview
 brightfield_exposure = 50000  # In microseconds for brightfield
