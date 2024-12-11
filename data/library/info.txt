@@ -1,0 +1,8 @@
+usaf_long
+* 1s exposure white light
+
+usaf_short
+* 0.5s exposure white light
+
+usaf_red
+* 2.5s exposure red light

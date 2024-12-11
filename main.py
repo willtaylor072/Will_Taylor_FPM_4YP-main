@@ -22,17 +22,19 @@ data_folder = 'data/recent' # For saving data images (diagnostics only)
 results_folder = 'results/recent' # For saving results
 
 # Imaging parameters
-grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
+grid_size = 5 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
 img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
 preview_exposure = 80000 # In microseconds for preview
 brightfield_exposure = 50000  # In microseconds for brightfield
-fpm_exposure = 500000  # In microseconds for FPM image capture
-LED_delay = 0.2 # In seconds for pause between FPM images to switch LED
+fpm_exposure = 800000  # In microseconds for FPM image capture
+led_delay = 0.2 # In seconds for pause between FPM images to switch LED
+led_color = 'white' # Illumination color
+WLENGTH = 550e-9 # Central wavelength of LED light, m, 550nm for white, 630nm for red, 460nm for blue
 x_coords,y_coords = fpm.LED_spiral(grid_size,x_offset=1,y_offset=1) # LED sequence (originally started with 7,7 but due to misalignment now start with 8,8)
 
 # Set parameters for reconstruction algorithm
 options = {
-    'max_iter': 1, # Number of iterations
+    'max_iter': 8, # Number of iterations
     'alpha': 1, # Regularisation parameter for object update
     'beta': 1, # Regularisation parameter for pupil update
     'plot_mode': 1, # 0, plot only at end; 1, plot every iteration
@@ -45,7 +47,6 @@ LED2SAMPLE = 80 # Distance from LED array to the sample, 80mm (larger distance l
 LED_P = 3.3 # LED pitch, mm
 NA = 0.1 # Objective numerical aperture
 PIX_SIZE = 1025e-9 # Pixel size on object plane, m
-WLENGTH = 550e-9 # Central wavelength of LED light, m
 # x_initial = -3.3 # x distance from first LED to optical axis, mm (+ve if first LED is to right of optical axis)
 # y_initial = 3.3 # y distance from first LED to optical axis, mm (+ve if first LED is below optical axis)
 x_initial = y_initial = 0 # We adjust the sequence instead so these are close to zero (first LED close to optical axis)
@@ -200,8 +201,8 @@ images = np.zeros((img_size,img_size,num_images))  # np array to store grayscale
 camera.set_controls({"ExposureTime": fpm_exposure})
 
 for i in range(num_images):
-    led_matrix.show_pixel(x_coords[i], y_coords[i], brightness=1)
-    time.sleep(LED_delay)  # Short pause for LED to turn on (possibly can remove)
+    led_matrix.show_pixel(x_coords[i], y_coords[i], brightness=1, color=led_color)
+    time.sleep(led_delay)  # Short pause for LED to turn on (possibly can remove)
     image = camera.capture_array()[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size] # img_size x img_size RGB image
     image_pil = Image.fromarray(image).convert('L') # Grayscale pillow image
     img_path = os.path.join(data_folder, f'image_{i}.png') # Create path name
