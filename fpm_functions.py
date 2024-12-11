@@ -312,7 +312,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             # img = IFT(FT(img)/glass_OTF)
             
             # Estimated image in Fourier domain, i.e. simulated exit wave throgh sample
-            # estimated_image = np.copy(object_cropped) # Cheating but works (pseudo-ptychography)
+            # estimated_image = np.copy(object_cropped) # Cheating but sort of works (pseudo-ptychography)
             estimated_image = object_cropped * pupil # Correct method (actual ptychography)
             
             if update_method == 1:
