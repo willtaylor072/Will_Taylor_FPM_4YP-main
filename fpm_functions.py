@@ -110,14 +110,14 @@ def plot_py(fig,axes,obj):
     plt.pause(0.1)     
     
 # Plotting for visualising reconstruction (notebook version)
-def plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size,quality):
+def plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,error):
     # Clear previous plots
     for ax in axes:
         ax.cla()  # Clear the current axes
 
     # Show spectrum
     axes[0].imshow(np.log(np.abs(obj) + 1), cmap='gray') # Show with log scale
-    axes[0].set_title(f'Spectrum of object: image {i+1}, iteration {iter+1} ')
+    axes[0].set_title(f'Spectrum of object: iteration {iter+1} ')
     if plot_mode == 2: # Plot every image
         square = patches.Rectangle((x_start, y_start), img_size, img_size, linewidth=0.5, edgecolor='red', facecolor='none')
         axes[0].add_patch(square)
@@ -134,13 +134,9 @@ def plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,it
     # axes[2].imshow(np.abs(pupil),cmap='gray')
     # axes[2].set_title('Current pupil magnitude')
     
-    # Show update size
-    axes[2].plot(update_size)
-    axes[2].set_title('Object update size')
-    
-    # Show quality of reconstruction
-    axes[3].plot(quality,'r')
-    axes[3].set_title('Reconstruction sharpness')
+    # Show error
+    axes[2].plot(error,'r')
+    axes[2].set_title('MSE of image and estimated image')
     
     # Update the figure
     clear_output(wait=True)  # Clear the output before displaying the new figure 
@@ -292,8 +288,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
     num_images = images.shape[2]
     obj_size = obj.shape[0] # Square
     obj_center = obj_size // 2 # Center of object (used for inserting spectra in correct place) 
-    update_size = np.zeros(num_images) # To monitor object update size (can spot instability numerically)
-    quality = np.zeros(num_images)
+    error = np.zeros(num_images) # Error between estimated image and actual image
     
     if pupil is None:
         pupil = np.copy(pupil_binary) # Start with binary mask if no pupil function passed
@@ -311,6 +306,10 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             
             # Measured image amplitude
             img = np.sqrt(images[:,:,i])
+            
+            # Account for glass slide (negligable)
+            # glass_OTF = 0.9 * np.exp(1j*2*np.pi*1.5e-3*(0.52)*np.sqrt(1-(kx[i]*550e-9)**2-(ky[i]*550e-9)**2))
+            # img = IFT(FT(img)/glass_OTF)
             
             # Estimated image in Fourier domain, i.e. simulated exit wave throgh sample
             # estimated_image = np.copy(object_cropped) # Cheating but works (pseudo-ptychography)
@@ -360,7 +359,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
                 pupil += beta * pupil_update # Update pupil with weight beta
                 # pupil[pupil_binary] = np.exp(1j*np.angle(pupil[pupil_binary])) # Intensity constraint
             
-            update_size[i] = np.mean(np.abs(object_update)) # To check instability
+            error[i] = np.mean(np.square(np.abs(IFT(estimated_image)) - img)) # Error of estimated image vs actual image
       
             # LED position (kx,ky) correction for image we just used, algorithm 1
             if LED_correction == 1:
@@ -376,7 +375,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
                 
             # Plot every image
             if plot_mode == 2:
-                plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size,quality) # Plotting for notebook
+                plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,error) # Plotting for notebook
         
         # Status message
         progress = int((iter+1)/max_iter * 100)
@@ -387,7 +386,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
         if plot_mode == 1:
             plot_py(fig,axes,obj) # Plotting for main.py 
         elif plot_mode == 3:
-            plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,update_size,quality) # Plotting for notebook
+            plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,error) # Plotting for notebook
     
     print('\n Reconstruction Done!') # Write to new line
 
