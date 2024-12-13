@@ -42,8 +42,8 @@ LED_P = 3.3 # LED pitch, mm
 NA = 0.1 # Objective numerical aperture
 PIX_SIZE = 1025e-9 # Pixel size on object plane, m
 WLENGTH = 550e-9 # Central wavelength of LED light, m
-x_offset = -3.3 # x distance from central LED to optical axis, mm (+ve if central LED is to right of optical axis)
-y_offset = 3.3 # y distance from central LED to optical axis, mm (+ve if central LED is below optical axis)
+x_offset = 0 # x distance from central LED to optical axis, mm (+ve if central LED is to right of optical axis)
+y_offset = 0 # y distance from central LED to optical axis, mm (+ve if central LED is below optical axis)
 
 System parameters for V1 microscope:
 LED2SAMPLE = 54 # Distance from LED array to the sample, mm (larger distance leads to closer overlapping Fourier circles)
@@ -51,3 +51,6 @@ LED_P = 3.3 # LED pitch, mm
 NA = 0.1 # Objective numerical aperture
 PIX_SIZE = 1090e-9 # Pixel size on object plane, m
 WLENGTH = 550e-9 # Central wavelength of LED light, m
+x_initial = -2.83 # x distance from first LED to optical axis, mm (+ve if first LED is to right of optical axis)
+y_initial = -3.39 # y distance from first LED to optical axis, mm (+ve if first LED is above optical axis)
+

@@ -1,11 +1,21 @@
-usaf_long
-* 1s exposure white light
-
-usaf_short
-* 0.5s exposure white light
-
+v2 microscope:
 usaf_red
 * 2.5s exposure red light
 
-usaf_dark
-* 0.8s exposure white light no ambient light at all
+usaf_v2
+* 0.8s exposure white light no ambient light at all (should be the best one)
+
+No set of parameters worked well for reconstruction...
+
+v1 microscope:
+usaf_v1 optimised parameters for reconstruction
+
+LED2SAMPLE = 55 # Distance from LED array to the sample, 80mm (larger distance leads to closer overlapping Fourier circles)
+LED_P = 3.3 # LED pitch, 3.3mm
+NA = 0.105 # Objective numerical aperture, 0.1
+PIX_SIZE = 1050e-9 # Pixel size on object plane, m, 1025nm for 3D printed microscope (directly measured)
+WLENGTH = 550e-9 # Central wavelength of LED light, m, 550nm for white, 630nm for red, 460nm for blue
+x_initial = -2.83 # x distance from first LED to optical axis, mm (+ve if first LED is to right of optical axis)
+y_initial = -3.39 # y distance from first LED to optical axis, mm (+ve if first LED is below optical axis)
+
+More info in ReadMe

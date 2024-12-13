@@ -48,7 +48,7 @@ LED_P = 3.3 # LED pitch, mm
 NA = 0.1 # Objective numerical aperture
 PIX_SIZE = 1025e-9 # Pixel size on object plane, m
 # x_initial = -3.3 # x distance from first LED to optical axis, mm (+ve if first LED is to right of optical axis)
-# y_initial = 3.3 # y distance from first LED to optical axis, mm (+ve if first LED is below optical axis)
+# y_initial = 3.3 # y distance from first LED to optical axis, mm (+ve if first LED is above optical axis)
 x_initial = y_initial = 0 # We adjust the sequence instead so these are close to zero (first LED close to optical axis)
 
 # Miscelaneous 
