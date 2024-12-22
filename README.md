@@ -5,7 +5,7 @@ KEY SCRIPTS
 * gather_data.ipynb is the Jupyter notebook version for gathering the dataset of images
 
 * main.py does whole process in one script
-* fpm_functions.py contains functions for main.py (should also work in the notebooks but careful with plotting)
+* fpm_functions.py contains functions for all scripts
 
 gpioset gpiochip4 45=0 to turn fan on on RPi
 
