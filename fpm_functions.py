@@ -74,16 +74,15 @@ def calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENG
     
     return np.ceil(2*np.round(2*max_freq/sampling_size)/img_size) # Upsampling ratio
 
-# Find the scaled LED wavevectors (for placing each low res image in Fourier domain)
+# Find the scaled (dimensionless) LED wavevectors (for placing each low res image in Fourier domain)
 def calculate_wavevectors(x, y, LED2SAMPLE, WLENGTH, sampling_size):
     
     kx = np.zeros(len(x)) # x components of wavevector for each LED illumination
     ky = np.zeros(len(x)) # y components
     for i in range(len(x)):
-        # Actual wavevectors are sin_theta/wavelength, but we calculate the scaled ones 
-        # so we can use them for indexing in the Fourier domain. 
+        # Actual wavevectors are sin_theta * k = sin_theta * 2pi / wlength
         sin_thetax = x[i]/(np.sqrt(x[i]**2 + LED2SAMPLE**2))
-        kx[i] = sin_thetax/(WLENGTH*sampling_size) # Scaled wavevector is true wavevector / sampling_size
+        kx[i] = sin_thetax/(WLENGTH*sampling_size) # Scaled / dimensionless wavevector
         
         sin_thetay = y[i]/(np.sqrt(y[i]**2 + LED2SAMPLE**2))
         ky[i] = sin_thetay/(WLENGTH*sampling_size)
