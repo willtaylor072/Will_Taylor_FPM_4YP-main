@@ -3,7 +3,10 @@ usaf_red
 * 2.5s exposure red light
 
 usaf_v2
-* 0.8s exposure white light no ambient light at all (should be the best one)
+* 0.8s exposure white light no ambient light at all 
+
+usaf_taped
+* 0.5s exposure with taped aperture under sample (2-4mm diameter) and no ambient light
 
 No set of parameters worked well for reconstruction...
 
