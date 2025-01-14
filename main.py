@@ -24,13 +24,15 @@ results_folder = 'results/recent' # For saving results
 # Imaging parameters
 grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
 img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
-preview_exposure = 80000 # In microseconds for preview
-brightfield_exposure = 50000  # In microseconds for brightfield
-fpm_exposure = 800000  # In microseconds for FPM image capture
-led_delay = 0.2 # In seconds for pause between FPM images to switch LED
+brightfield_preview = True # Preview bright or darkfield
+preview_exposure = int(50e3) if brightfield_preview else int(500e3) # In microseconds for preview
+brightfield_exposure = int(50e3)  # In microseconds for brightfield
+fpm_exposure = int(500e3)  # In microseconds for FPM image capture
+led_delay = 0 # In seconds for pause between FPM images to switch LED
 led_color = 'white' # Illumination color
 WLENGTH = 550e-9 # Central wavelength of LED light, m, 550nm for white, 630nm for red, 460nm for blue
 x_coords,y_coords = fpm.LED_spiral(grid_size,x_offset=1,y_offset=1) # LED sequence (originally started with 7,7 but due to misalignment now start with 8,8)
+
 
 # Set parameters for reconstruction algorithm
 options = {
@@ -94,9 +96,10 @@ num_images = grid_size**2 # Total number of FPM images
 crop_start_x = int(1456/2 - img_size/2) # These crop values ensure images are in center of camera FOV
 crop_start_y = int(1088/2 - img_size/2)
 
+
 # Initialise LED array
 led_matrix = RPiLedMatrix()
-led_matrix.set_rotation(135) # Ensure 0,0 is bottom left pixel
+led_matrix.set_rotation(45) # Ensure 0,0 is bottom left pixel and as shown on microscope
 
 # Initialize camera
 camera = Picamera2()
@@ -108,7 +111,10 @@ camera.start()
 
 # Preview alignment using matplotlib
 print("Align your sample mechanically or move region with key arrows. Press ENTER when ready.")
-led_matrix.show_circle(radius=2, color='white', brightness=1)  # Turn on brightfield LEDs
+if brightfield_preview:
+    led_matrix.show_circle(radius=3, offset_x=1,offset_y=1, color='white', brightness=1)  # Turn on brightfield LEDs
+else:
+    led_matrix.show_circle(radius=3, offset_x=1,offset_y=1, color='black', outside_color='white') # Darkfield preview
 quit_preview = False
 plot_closed = False
 
