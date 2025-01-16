@@ -80,12 +80,18 @@ def calculate_wavevectors(x, y, LED2SAMPLE, WLENGTH, sampling_size):
     kx = np.zeros(len(x)) # x components of wavevector for each LED illumination
     ky = np.zeros(len(x)) # y components
     for i in range(len(x)):
-        # Actual wavevectors are sin_theta * k = sin_theta * 2pi / wlength
-        sin_thetax = x[i]/(np.sqrt(x[i]**2 + LED2SAMPLE**2))
-        kx[i] = sin_thetax/(WLENGTH*sampling_size) # Scaled / dimensionless wavevector
+        # x and y angles from optical axis to LED 
+        sin_theta_x = x[i]/(np.sqrt(x[i]**2 + LED2SAMPLE**2))
+        sin_theta_y = y[i]/(np.sqrt(y[i]**2 + LED2SAMPLE**2))
         
-        sin_thetay = y[i]/(np.sqrt(y[i]**2 + LED2SAMPLE**2))
-        ky[i] = sin_thetay/(WLENGTH*sampling_size)
+        # Scaled wavevectors for image placement in Fourier domain
+        kx[i] = sin_theta_x/(WLENGTH*sampling_size) 
+        ky[i] = sin_theta_y/(WLENGTH*sampling_size)
+        
+        # (Actual wavevectors are sin_theta_x * k = sin_theta_x * 2pi / wlength)
+        # kx[i] = sin_theta_x * 2*np.pi / WLENGTH
+        # ky[i] = sin_theta_y * 2*np.pi / WLENGTH
+        
     
     return kx,ky
 

@@ -34,7 +34,7 @@ Momentum may be used to speed up recovery process.
 
 #############################################
 
-Optical parameters (everything in data library uses V2):
+Optical parameters:
 
 System parameters for V2 microscope:
 LED2SAMPLE = 80 # Distance from LED array to the sample, mm (larger distance leads to closer overlapping Fourier circles)
