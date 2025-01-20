@@ -8,7 +8,48 @@ import sys
 from PIL import Image
 import numpy as np
 from scipy.fft import fft2, ifft2, fftshift, ifftshift
-import cv2
+from skimage.measure import profile_line 
+
+def pixel_slice_selection(image,group,element,snap=True):
+    has_clicked = False # Flag for click logic
+
+    # Show the image using matplotlib
+    fig,ax = plt.subplots()
+    ax.imshow(image,cmap='gray')
+    ax.set_title(f"Select the line profile for group {group} element {element} ")
+
+    # Create a callback to capture the selected region
+    coords = {"start": None, "end": None}
+
+    def on_click(event):
+        nonlocal has_clicked # Allow us to access the flag
+        if event.inaxes == ax and not has_clicked:
+            coords["start"] = (int(event.ydata), int(event.xdata))
+            print(f"Selection started at: {coords['start']}")
+            has_clicked = True
+        elif event.inaxes == ax and has_clicked:
+            y = int(event.ydata)
+            x = int(event.xdata)
+            # Handle the snap behaviour
+            if snap:
+                if abs(y-coords['start'][0]) < abs(x-coords['start'][1]): # Closer in y
+                    y = coords['start'][0]
+                else: # Closer in x
+                    x = coords['start'][1] 
+            coords['end'] = (y,x)
+            print(f"Selection ended at: {coords['end']}")
+            plt.close(fig) # Close fig to initiate return
+
+    # Connect the mouse events
+    fig.canvas.mpl_connect("button_press_event", on_click)
+
+    plt.show() # Show image and wait for user inputs
+
+    # Extract the pixel slice once fig has been closed
+    profile = profile_line(image,coords["start"],coords["end"])
+    return profile,coords
+
+
     
 # Generate coordinates to turn on LEDs in a spiral pattern, moving right up left down right up left down....
 # 0,0 is bottom left LED when rotation is 135 degrees. Can use offsets to center the starting point with optical axis. 

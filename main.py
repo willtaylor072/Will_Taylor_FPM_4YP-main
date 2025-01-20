@@ -244,8 +244,8 @@ y_abs = (y_coords - y_coords[0]) * LED_P + y_initial # y distances
 
 # Size of reconstructed image (for given parameters upsampling is between 2 and 5 depending on grid_size)
 # Can do seperately x and y if image is not square
-upsampling_ratio = fpm.calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, sampling_size)
-# upsampling_ratio = 3 # Or can use a set value
+# upsampling_ratio = fpm.calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, sampling_size)
+upsampling_ratio = 5 # Or can use a set value
 obj_size = upsampling_ratio * img_size
 print(f'Upsampling ratio: {upsampling_ratio}; Reconstructed Pixel Size: {int(1e9*PIX_SIZE/(upsampling_ratio))}nm')
 
