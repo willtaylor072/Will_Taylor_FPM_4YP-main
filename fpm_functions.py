@@ -8,48 +8,6 @@ import sys
 from PIL import Image
 import numpy as np
 from scipy.fft import fft2, ifft2, fftshift, ifftshift
-from skimage.measure import profile_line 
-
-def pixel_slice_selection(image,group,element,snap=True):
-    has_clicked = False # Flag for click logic
-
-    # Show the image using matplotlib
-    fig,ax = plt.subplots()
-    ax.imshow(image,cmap='gray')
-    ax.set_title(f"Select the line profile for group {group} element {element} ")
-
-    # Create a callback to capture the selected region
-    coords = {"start": None, "end": None}
-
-    def on_click(event):
-        nonlocal has_clicked # Allow us to access the flag
-        if event.inaxes == ax and not has_clicked:
-            coords["start"] = (int(event.ydata), int(event.xdata))
-            print(f"Selection started at: {coords['start']}")
-            has_clicked = True
-        elif event.inaxes == ax and has_clicked:
-            y = int(event.ydata)
-            x = int(event.xdata)
-            # Handle the snap behaviour
-            if snap:
-                if abs(y-coords['start'][0]) < abs(x-coords['start'][1]): # Closer in y
-                    y = coords['start'][0]
-                else: # Closer in x
-                    x = coords['start'][1] 
-            coords['end'] = (y,x)
-            print(f"Selection ended at: {coords['end']}")
-            plt.close(fig) # Close fig to initiate return
-
-    # Connect the mouse events
-    fig.canvas.mpl_connect("button_press_event", on_click)
-
-    plt.show() # Show image and wait for user inputs
-
-    # Extract the pixel slice once fig has been closed
-    profile = profile_line(image,coords["start"],coords["end"])
-    return profile,coords
-
-
     
 # Generate coordinates to turn on LEDs in a spiral pattern, moving right up left down right up left down....
 # 0,0 is bottom left LED when rotation is 135 degrees. Can use offsets to center the starting point with optical axis. 
@@ -182,7 +140,7 @@ def plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,it
     
     # Show error
     axes[2].plot(error,'r')
-    axes[2].set_title('MSE of image and estimated image')
+    axes[2].set_title('Error at each image')
     
     # Update the figure
     clear_output(wait=True)  # Clear the output before displaying the new figure 
@@ -206,8 +164,8 @@ def update_LED_positions_accurate(obj,img,pupil,kx,ky,img_size,obj_center,image_
     # Find error between image and estimated image, where we offset the object crop region slightly to find estimated image
     for x in x_offsets:
         for y in y_offsets:       
-            estimated_image = IFT(obj[y_start+y:y_start+y+img_size, x_start+x:x_start+x+img_size]*pupil) # Estimated image defined as usual (but with offsetted spectrum)
-            error = np.mean((np.abs(estimated_image) - img)**2) # MSE between estimated and measured image
+            exit_wave = IFT(obj[y_start+y:y_start+y+img_size, x_start+x:x_start+x+img_size]*pupil) # Estimated image defined as usual (but with offsetted spectrum)
+            error = np.mean((np.abs(exit_wave) - img)**2) # MSE between estimated and measured image
             # error_heatmap[(search_range // 2 - y), (x + search_range // 2)] = error # Add error to heatmap (convert from cartesian to image coords)
     
             # Track the smallest error position
@@ -246,6 +204,7 @@ def update_LED_positions_accurate(obj,img,pupil,kx,ky,img_size,obj_center,image_
 
 # Modification of accurate algorithm to use a subrange to search for minimum error LED position.
 # CURRENTLY DOES NOT WORK - landscape is not smooth, so we don't converge using subranges
+# TODO: TRY NEW DEFINITION OF error = exit_wave - update_wave
 def update_LED_positions_fast(obj,img,pupil,kx,ky,img_size,obj_center,image_number,subrange_size=5):
     
     iteration_limit = 10 # Max number of re-center and search iterations
@@ -265,8 +224,8 @@ def update_LED_positions_fast(obj,img,pupil,kx,ky,img_size,obj_center,image_numb
         # Find error between image and estimated image, where we offset the object crop region slightly to find estimated image
         for x in x_offsets: 
             for y in y_offsets:       
-                estimated_image = IFT(obj[y_start+y:y_start+y+img_size, x_start+x:x_start+x+img_size]*pupil) # Estimated image is IFT of cropped spectrum at the shifted center
-                error = np.mean((np.abs(estimated_image) - img)**2) # MSE between estimated and measured image
+                exit_wave = IFT(obj[y_start+y:y_start+y+img_size, x_start+x:x_start+x+img_size]*pupil) # Estimated image is IFT of cropped spectrum at the shifted center
+                error = np.mean((np.abs(exit_wave) - img)**2) # MSE between estimated and measured image
                 # error_heatmap[(subrange_size // 2 - y), (x + subrange_size // 2)] = error # Add error to heatmap (convert from cartesian to image coords)
        
                 # We are looking for the jiggle (x,y) that minimises the error 
@@ -310,7 +269,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
     # Inputs: 
     # images; low res image array data, in order taken
     # kx,ky; location of LEDs in Fourier domain, in order of images taken
-    # obj; initial estimate for object in frequency domain
+    # obj; initial estimate for object in spacial frequency domain
     # pupil_binary; binary mask for low pass cutoff
     # options; alpha, beta (regularisation), max_iter, plotting, LED_correction
     # fig, axes; for plotting
@@ -353,30 +312,33 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             # Measured image amplitude
             img = np.sqrt(images[:,:,i])
             
+            # Simulated exit wave throgh sample
+            exit_wave = object_cropped * pupil # Correct method (actual ptychography)
+            
+            # Update wave formed with magnitude of measured image and phase of exit_wave
+            update_wave = FT(img*IFT(exit_wave)/np.abs(IFT(exit_wave)))
+            # update_wave = FT(img*np.exp(1j*np.angle(IFT(exit_wave)))) # This is the same
+            
             # Account for glass slide (negligable)
             # glass_OTF = 0.9 * np.exp(1j*2*np.pi*1.5e-3*(0.52)*np.sqrt(1-(kx[i]*550e-9)**2-(ky[i]*550e-9)**2))
             # img = IFT(FT(img)/glass_OTF)
             
-            # Estimated image in Fourier domain, i.e. simulated exit wave throgh sample
-            # estimated_image = np.copy(object_cropped) # Cheating but sort of works (pseudo-ptychography)
-            estimated_image = object_cropped * pupil # Correct method (actual ptychography)
+            # TODO
+            # PIE, ePIE, rPIE and suitable parameters / momentum from: 
+            # https://opg.optica.org/directpdfaccess/d2249c12-f4bb-4f16-9897369715108509_368463/optica-4-7-736.pdf?da=1&id=368463&seq=0&mobile=no
             
             if update_method == 1:
                 # Momentum can still be used (less obvious)
                 # alpha = 0.2*(1+iter)
                 
-                # The update image (in Fourier domain) is composed of the magnitude of the measured image, 
-                # the phase of the estimated image and also the estimated image spectrum is subtracted
-                update_image = FT(img*np.exp(1j*np.angle(IFT(estimated_image)))) - estimated_image
-                
                 # Object update QN
-                numerator = np.abs(pupil) * np.conj(pupil) * update_image
+                numerator = np.abs(pupil) * np.conj(pupil) * (update_wave-exit_wave)
                 denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
                 object_update = numerator / denominator
                 object_cropped += object_update # Update cropped region
 
                 # Pupil update QN
-                numerator = np.abs(object_cropped) * np.conj(object_cropped) * update_image * pupil_binary
+                numerator = np.abs(object_cropped) * np.conj(object_cropped) * (update_wave-exit_wave) * pupil_binary
                 denominator = np.max(np.abs(obj)) * (np.abs(object_cropped)**2 + beta)
                 pupil_update = numerator / denominator
                 pupil += pupil_update
@@ -388,24 +350,153 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
                 # alpha = 0.4*(1+iter)
                 # beta = 0.4*(1+iter)
                 
-                # Update image formed with magnitude of measured image, normalised by estimated image
-                # and again spectrum of estimated image is removed
-                update_image = FT(img*IFT(estimated_image)/np.abs(IFT(estimated_image))) - estimated_image
-                
                 # Object update EPRY
-                numerator = np.conj(pupil) * update_image
+                numerator = np.conj(pupil) * (update_wave-exit_wave)
                 denominator = np.max(np.abs(pupil))**2
                 object_update = numerator / denominator
                 object_cropped += alpha * object_update # Add to main spectrum with weight alpha
                 
                 # Pupil update EPRY
-                numerator = np.conj(object_cropped) * update_image * pupil_binary
+                numerator = np.conj(object_cropped) * (update_wave-exit_wave) * pupil_binary
                 denominator = np.max(np.abs(object_cropped))**2
                 pupil_update = numerator / denominator
                 pupil += beta * pupil_update # Update pupil with weight beta
                 # pupil[pupil_binary] = np.exp(1j*np.angle(pupil[pupil_binary])) # Intensity constraint
             
-            error[i] = np.mean(np.square(np.abs(IFT(estimated_image)) - img)) # Error of estimated image vs actual image
+            # error[i] = np.mean(np.square(np.abs(IFT(exit_wave)) - img)) # Error of estimated image vs actual image
+            error[i] = np.mean((exit_wave-update_wave)**2)
+      
+            # LED position (kx,ky) correction for image we just used, algorithm 1
+            if LED_correction == 1:
+                kx_new,ky_new = update_LED_positions_accurate(obj,img,pupil,kx[i],ky[i],img_size,obj_center,i)
+                kx[i] = kx_new # Updated LED positions
+                ky[i] = ky_new
+            
+            # Algorithm 2    
+            if LED_correction == 2:
+                kx_new,ky_new = update_LED_positions_fast(obj,img,pupil,kx[i],ky[i],img_size,obj_center,i)
+                kx[i] = kx_new # Updated LED positions
+                ky[i] = ky_new
+                
+            # Plot every image
+            if plot_mode == 2:
+                plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,error) # Plotting for notebook
+        
+        # Status message
+        progress = int((iter+1)/max_iter * 100)
+        sys.stdout.write(f'\r Reconstruction Progress: {progress}%') # Write to same line
+        sys.stdout.flush()
+        
+        # Plot every iteration
+        if plot_mode == 1:
+            plot_py(fig,axes,obj) # Plotting for main.py 
+        elif plot_mode == 3:
+            plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,error) # Plotting for notebook
+    
+    print('\n Reconstruction Done!') # Write to new line
+
+    return IFT(obj),pupil,kx,ky
+
+# UPDATED RECONSTRUCTION FUNCTIONS
+def reconstruct_v2(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=None):
+    # Inputs: 
+    # images; low res image array data, in order taken
+    # kx,ky; location of LEDs in Fourier domain, in order of images taken
+    # obj; initial estimate for object in spacial frequency domain
+    # pupil_binary; binary mask for low pass cutoff
+    # options; alpha, beta (regularisation), max_iter, plotting, LED_correction
+    # fig, axes; for plotting
+    # pupil; known initial pupil function (optional)
+    
+    # Returns: 
+    # IFT(obj); recovered object
+    # pupil; recovered pupil function
+    # kx,ky; updated LED positions (or same as input if no LED correction)
+    
+    # Unpack options
+    alpha = options['alpha'] # Regularisation for object update
+    beta = options['beta'] # Regularisation for pupil update
+    max_iter = options['max_iter'] # Number of iterations to run algorithm (1 iteration uses all images)
+    plot_mode = options['plot_mode'] # If using .py use 0,1. For notebook use 2,3
+    update_method = options['update_method'] # 1 for QN, 2 for EPRY (alpha beta need to be changed accordingly)
+    LED_correction = options['LED_correction'] # Do correction for kx,ky - LED coordinates
+    
+    # Other parameters
+    img_size = images.shape[0] # Square, same size as pupil function
+    num_images = images.shape[2]
+    obj_size = obj.shape[0] # Square
+    obj_center = obj_size // 2 # Center of object (used for inserting spectra in correct place) 
+    error = np.zeros(num_images) # Error between estimated image and actual image
+    
+    if pupil is None:
+        pupil = np.copy(pupil_binary) # Start with binary mask if no pupil function passed
+    pupil = pupil.astype('complex64') # Pupil function for updating needs to be complex  
+    
+    # Main loop
+    for iter in range(max_iter):
+        for i in range(num_images): # For each image in data set  
+            # Determine object crop region
+            x_start = int(obj_center + kx[i] - img_size//2) 
+            y_start = int(obj_center - ky[i] - img_size//2)  
+            
+            # The relevant part of object spectrum to update
+            object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size] # Updates to object_cropped will directly modify main spectrum
+            
+            # Measured image amplitude
+            img = np.sqrt(images[:,:,i])
+            
+            # Simulated exit wave throgh sample
+            exit_wave = object_cropped * pupil # Correct method (actual ptychography)
+            
+            # TODO
+            # PIE, ePIE, rPIE and suitable parameters / momentum from: 
+            # https://opg.optica.org/directpdfaccess/d2249c12-f4bb-4f16-9897369715108509_368463/optica-4-7-736.pdf?da=1&id=368463&seq=0&mobile=no
+            
+            if update_method == 1:
+                # Momentum can still be used (less obvious)
+                # alpha = 0.2*(1+iter)
+                
+                # The update wave (in Fourier domain) is composed of the magnitude of the measured image and
+                # the phase of the exit_wave
+                update_wave = FT(img*np.exp(1j*np.angle(IFT(exit_wave))))
+                
+                # Object update QN
+                numerator = np.abs(pupil) * np.conj(pupil) * (update_wave-exit_wave)
+                denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
+                object_update = numerator / denominator
+                object_cropped += object_update # Update cropped region
+
+                # Pupil update QN
+                numerator = np.abs(object_cropped) * np.conj(object_cropped) * (update_wave-exit_wave) * pupil_binary
+                denominator = np.max(np.abs(obj)) * (np.abs(object_cropped)**2 + beta)
+                pupil_update = numerator / denominator
+                pupil += pupil_update
+                # pupil[pupil_binary] = np.exp(1j*np.angle(pupil[pupil_binary])) # Intensity constraint
+            
+            # ePIE algorithm (extened ptychographic iterative engine)   
+            elif update_method == 2:
+                # Momentum
+                # alpha = 0.4*(1+iter)
+                # beta = 0.4*(1+iter)
+                
+                # Update wave formed with magnitude of measured image and phase of exit_wave
+                update_wave = FT(img*IFT(exit_wave)/np.abs(IFT(exit_wave)))
+                
+                # Object update EPRY
+                numerator = np.conj(pupil) * (update_wave-exit_wave)
+                denominator = np.max(np.abs(pupil))**2
+                object_update = numerator / denominator
+                object_cropped += alpha * object_update # Add to main spectrum with weight alpha
+                
+                # Pupil update EPRY
+                numerator = np.conj(object_cropped) * (update_wave-exit_wave) * pupil_binary
+                denominator = np.max(np.abs(object_cropped))**2
+                pupil_update = numerator / denominator
+                pupil += beta * pupil_update # Update pupil with weight beta
+                # pupil[pupil_binary] = np.exp(1j*np.angle(pupil[pupil_binary])) # Intensity constraint
+            
+            # error[i] = np.mean(np.square(np.abs(IFT(exit_wave)) - img)) # Error of estimated image vs actual image
+            error[i] = np.square(exit_wave-update_wave)
       
             # LED position (kx,ky) correction for image we just used, algorithm 1
             if LED_correction == 1:
