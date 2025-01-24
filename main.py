@@ -24,7 +24,7 @@ results_folder = 'results/recent' # For saving results
 # Imaging parameters
 grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
 img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
-brightfield_preview = False # Preview bright or darkfield
+brightfield_preview = True # Preview bright or darkfield
 preview_exposure = int(50e3) if brightfield_preview else int(500e3) # In microseconds for preview
 brightfield_exposure = int(50e3)  # In microseconds for brightfield
 fpm_exposure = int(500e3)  # In microseconds for FPM image capture
