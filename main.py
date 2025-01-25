@@ -39,9 +39,9 @@ options = {
     'max_iter': 8, # Number of iterations
     'alpha': 1, # Regularisation parameter for object update
     'beta': 1, # Regularisation parameter for pupil update
-    'plot_mode': 1, # 0, plot only at end; 1, plot every iteration
+    'plot_mode': 3, # 0, off; 2, plot every image; 3, plot every iteration (notebook version)
     'LED_correction': 0, # 0, off; 1, accurate; 2, fast. Update wavevectors during reconstruction 
-    'update_method': 2, # 1, Quasi-Newton object and pupil updates; 2, ePIE object and pupil updates (faster)
+    'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE
 }
 
 # Optical system parameters

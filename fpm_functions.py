@@ -292,8 +292,8 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
     img_size = images.shape[0] # Square, same size as pupil function
     num_images = images.shape[2]
     obj_size = obj.shape[0] # Square
-    obj_center = obj_size // 2 # Center of object (used for inserting spectra in correct place) 
-    error = np.zeros(num_images) # Error between estimated image and actual image
+    obj_center = obj_size // 2 # Center of object
+    error = np.zeros(num_images) # Error between exit wave and update wave
     
     if pupil is None:
         pupil = np.copy(pupil_binary) # Start with binary mask if no pupil function passed
@@ -312,58 +312,76 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             # Measured image amplitude
             img = np.sqrt(images[:,:,i])
             
-            # Simulated exit wave throgh sample
-            exit_wave = object_cropped * pupil # Correct method (actual ptychography)
+            # Exit wave throgh sample
+            exit_wave = object_cropped * pupil
             
             # Update wave formed with magnitude of measured image and phase of exit_wave
             update_wave = FT(img*IFT(exit_wave)/np.abs(IFT(exit_wave)))
-            # update_wave = FT(img*np.exp(1j*np.angle(IFT(exit_wave)))) # This is the same
             
-            # Account for glass slide (negligable)
-            # glass_OTF = 0.9 * np.exp(1j*2*np.pi*1.5e-3*(0.52)*np.sqrt(1-(kx[i]*550e-9)**2-(ky[i]*550e-9)**2))
-            # img = IFT(FT(img)/glass_OTF)
-            
-            # TODO
-            # PIE, ePIE, rPIE and suitable parameters / momentum from: 
-            # https://opg.optica.org/directpdfaccess/d2249c12-f4bb-4f16-9897369715108509_368463/optica-4-7-736.pdf?da=1&id=368463&seq=0&mobile=no
-            
+            # PIE update
             if update_method == 1:
                 # Momentum can still be used (less obvious)
                 # alpha = 0.2*(1+iter)
                 
-                # Object update QN
+                # Original PIE updates
+                # # Object update
+                # numerator = np.abs(pupil) * np.conj(pupil) * (update_wave-exit_wave)
+                # denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha*np.max(np.abs(pupil))**2)
+                # object_update = numerator / denominator
+                # object_cropped += object_update 
+
+                # # Pupil update
+                # numerator = np.abs(object_cropped) * np.conj(object_cropped) * (update_wave-exit_wave) * pupil_binary
+                # denominator = np.max(np.abs(obj)) * (np.abs(object_cropped)**2 + beta*np.max(np.abs(obj))**2)
+                # pupil_update = numerator / denominator
+                # pupil += pupil_update
+                
+                # Faster if we omit a denominator term
+                # Object update
                 numerator = np.abs(pupil) * np.conj(pupil) * (update_wave-exit_wave)
                 denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
                 object_update = numerator / denominator
-                object_cropped += object_update # Update cropped region
+                object_cropped += object_update 
 
-                # Pupil update QN
+                # Pupil update
                 numerator = np.abs(object_cropped) * np.conj(object_cropped) * (update_wave-exit_wave) * pupil_binary
                 denominator = np.max(np.abs(obj)) * (np.abs(object_cropped)**2 + beta)
                 pupil_update = numerator / denominator
                 pupil += pupil_update
-                # pupil[pupil_binary] = np.exp(1j*np.angle(pupil[pupil_binary])) # Intensity constraint
             
-            # ePIE algorithm (extened ptychographic iterative engine)   
+            # ePIE update
             elif update_method == 2:
                 # Momentum
                 # alpha = 0.4*(1+iter)
                 # beta = 0.4*(1+iter)
                 
-                # Object update EPRY
-                numerator = np.conj(pupil) * (update_wave-exit_wave)
+                # Object update
+                numerator = alpha * np.conj(pupil) * (update_wave-exit_wave)
                 denominator = np.max(np.abs(pupil))**2
                 object_update = numerator / denominator
-                object_cropped += alpha * object_update # Add to main spectrum with weight alpha
+                object_cropped += object_update 
                 
-                # Pupil update EPRY
-                numerator = np.conj(object_cropped) * (update_wave-exit_wave) * pupil_binary
+                # Pupil update
+                numerator = beta * np.conj(object_cropped) * (update_wave-exit_wave) * pupil_binary
                 denominator = np.max(np.abs(object_cropped))**2
                 pupil_update = numerator / denominator
-                pupil += beta * pupil_update # Update pupil with weight beta
-                # pupil[pupil_binary] = np.exp(1j*np.angle(pupil[pupil_binary])) # Intensity constraint
-            
-            # error[i] = np.mean(np.square(np.abs(IFT(exit_wave)) - img)) # Error of estimated image vs actual image
+                pupil += pupil_update
+                
+            # rPIE update
+            elif update_method == 3:
+                
+                # Object update
+                numerator = np.conj(pupil) * (update_wave-exit_wave)
+                denominator = (1-alpha) * np.abs(pupil)**2 + alpha * np.max(np.abs(pupil))**2
+                object_update = numerator / denominator
+                object_cropped += object_update 
+                
+                # Pupil update
+                numerator = np.conj(object_cropped) * (update_wave-exit_wave) * pupil_binary
+                denominator = (1-beta) * np.abs(object_cropped)**2 + beta * np.max(np.abs(object_cropped))**2
+                pupil_update = numerator / denominator
+                pupil += pupil_update
+                
             error[i] = np.mean((exit_wave-update_wave)**2)
       
             # LED position (kx,ky) correction for image we just used, algorithm 1
@@ -396,136 +414,3 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
     print('\n Reconstruction Done!') # Write to new line
 
     return IFT(obj),pupil,kx,ky
-
-# UPDATED RECONSTRUCTION FUNCTIONS
-def reconstruct_v2(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=None):
-    # Inputs: 
-    # images; low res image array data, in order taken
-    # kx,ky; location of LEDs in Fourier domain, in order of images taken
-    # obj; initial estimate for object in spacial frequency domain
-    # pupil_binary; binary mask for low pass cutoff
-    # options; alpha, beta (regularisation), max_iter, plotting, LED_correction
-    # fig, axes; for plotting
-    # pupil; known initial pupil function (optional)
-    
-    # Returns: 
-    # IFT(obj); recovered object
-    # pupil; recovered pupil function
-    # kx,ky; updated LED positions (or same as input if no LED correction)
-    
-    # Unpack options
-    alpha = options['alpha'] # Regularisation for object update
-    beta = options['beta'] # Regularisation for pupil update
-    max_iter = options['max_iter'] # Number of iterations to run algorithm (1 iteration uses all images)
-    plot_mode = options['plot_mode'] # If using .py use 0,1. For notebook use 2,3
-    update_method = options['update_method'] # 1 for QN, 2 for EPRY (alpha beta need to be changed accordingly)
-    LED_correction = options['LED_correction'] # Do correction for kx,ky - LED coordinates
-    
-    # Other parameters
-    img_size = images.shape[0] # Square, same size as pupil function
-    num_images = images.shape[2]
-    obj_size = obj.shape[0] # Square
-    obj_center = obj_size // 2 # Center of object (used for inserting spectra in correct place) 
-    error = np.zeros(num_images) # Error between estimated image and actual image
-    
-    if pupil is None:
-        pupil = np.copy(pupil_binary) # Start with binary mask if no pupil function passed
-    pupil = pupil.astype('complex64') # Pupil function for updating needs to be complex  
-    
-    # Main loop
-    for iter in range(max_iter):
-        for i in range(num_images): # For each image in data set  
-            # Determine object crop region
-            x_start = int(obj_center + kx[i] - img_size//2) 
-            y_start = int(obj_center - ky[i] - img_size//2)  
-            
-            # The relevant part of object spectrum to update
-            object_cropped = obj[y_start:y_start+img_size, x_start:x_start+img_size] # Updates to object_cropped will directly modify main spectrum
-            
-            # Measured image amplitude
-            img = np.sqrt(images[:,:,i])
-            
-            # Simulated exit wave throgh sample
-            exit_wave = object_cropped * pupil # Correct method (actual ptychography)
-            
-            # TODO
-            # PIE, ePIE, rPIE and suitable parameters / momentum from: 
-            # https://opg.optica.org/directpdfaccess/d2249c12-f4bb-4f16-9897369715108509_368463/optica-4-7-736.pdf?da=1&id=368463&seq=0&mobile=no
-            
-            if update_method == 1:
-                # Momentum can still be used (less obvious)
-                # alpha = 0.2*(1+iter)
-                
-                # The update wave (in Fourier domain) is composed of the magnitude of the measured image and
-                # the phase of the exit_wave
-                update_wave = FT(img*np.exp(1j*np.angle(IFT(exit_wave))))
-                
-                # Object update QN
-                numerator = np.abs(pupil) * np.conj(pupil) * (update_wave-exit_wave)
-                denominator = np.max(np.abs(pupil)) * (np.abs(pupil)**2 + alpha)
-                object_update = numerator / denominator
-                object_cropped += object_update # Update cropped region
-
-                # Pupil update QN
-                numerator = np.abs(object_cropped) * np.conj(object_cropped) * (update_wave-exit_wave) * pupil_binary
-                denominator = np.max(np.abs(obj)) * (np.abs(object_cropped)**2 + beta)
-                pupil_update = numerator / denominator
-                pupil += pupil_update
-                # pupil[pupil_binary] = np.exp(1j*np.angle(pupil[pupil_binary])) # Intensity constraint
-            
-            # ePIE algorithm (extened ptychographic iterative engine)   
-            elif update_method == 2:
-                # Momentum
-                # alpha = 0.4*(1+iter)
-                # beta = 0.4*(1+iter)
-                
-                # Update wave formed with magnitude of measured image and phase of exit_wave
-                update_wave = FT(img*IFT(exit_wave)/np.abs(IFT(exit_wave)))
-                
-                # Object update EPRY
-                numerator = np.conj(pupil) * (update_wave-exit_wave)
-                denominator = np.max(np.abs(pupil))**2
-                object_update = numerator / denominator
-                object_cropped += alpha * object_update # Add to main spectrum with weight alpha
-                
-                # Pupil update EPRY
-                numerator = np.conj(object_cropped) * (update_wave-exit_wave) * pupil_binary
-                denominator = np.max(np.abs(object_cropped))**2
-                pupil_update = numerator / denominator
-                pupil += beta * pupil_update # Update pupil with weight beta
-                # pupil[pupil_binary] = np.exp(1j*np.angle(pupil[pupil_binary])) # Intensity constraint
-            
-            # error[i] = np.mean(np.square(np.abs(IFT(exit_wave)) - img)) # Error of estimated image vs actual image
-            error[i] = np.square(exit_wave-update_wave)
-      
-            # LED position (kx,ky) correction for image we just used, algorithm 1
-            if LED_correction == 1:
-                kx_new,ky_new = update_LED_positions_accurate(obj,img,pupil,kx[i],ky[i],img_size,obj_center,i)
-                kx[i] = kx_new # Updated LED positions
-                ky[i] = ky_new
-            
-            # Algorithm 2    
-            if LED_correction == 2:
-                kx_new,ky_new = update_LED_positions_fast(obj,img,pupil,kx[i],ky[i],img_size,obj_center,i)
-                kx[i] = kx_new # Updated LED positions
-                ky[i] = ky_new
-                
-            # Plot every image
-            if plot_mode == 2:
-                plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,error) # Plotting for notebook
-        
-        # Status message
-        progress = int((iter+1)/max_iter * 100)
-        sys.stdout.write(f'\r Reconstruction Progress: {progress}%') # Write to same line
-        sys.stdout.flush()
-        
-        # Plot every iteration
-        if plot_mode == 1:
-            plot_py(fig,axes,obj) # Plotting for main.py 
-        elif plot_mode == 3:
-            plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,error) # Plotting for notebook
-    
-    print('\n Reconstruction Done!') # Write to new line
-
-    return IFT(obj),pupil,kx,ky
-
