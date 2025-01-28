@@ -21,7 +21,7 @@ KEY FINDINGS AND CONSIDERATIONS
 Central LED (first LED in sequence) should be close to optical axis. If it is not directly aligned with
 the optical axis (i.e. vertically through aperture of objective) then we need to use x_offset and y_offset
 within LED_spiral algorithm to fix. For each offset unit we reduce max grid size by 1. I.e. for 1,1 offset max grid size is 15.
-For consistancy use LED rotation of 135 degrees so that LED (0,0) is in indicated position (back left)
+For consistancy use LED rotation of 135 degrees so that LED (0,0) is in indicated position (back left).
 
 The path from the top of the objective to the camera lens must be covered in order to avoid ambient light from washing out the signal. 
 Adjusting the z stage to focus will slightly move the image (due to tilting), so do this first and then align x,y. 
@@ -36,16 +36,21 @@ If the darkfield has light leaking into it, chose the crop region where there is
 make the darkfield images have the best contrast (see data_grids 64_edge vs 62_wider). Doesn't help when LED to sample distance
 becomes too big... Think this is all caused by the aperture under the sample. 
 
+(For usaf_v3_64 the aperture under the sample was widened from 3mm to 3.4mm which made the darkfield images higher contrast (less leakge))
+
+Squiggly artefacts in reconstructed images are very sensitive to input k-vectors -> i.e. LED to sample distance and initial LED position
+
 #############################################
 
 Optical parameters:
 
 System parameters for V3 microscope:
-LED2SAMPLE: measure directly
+LED2SAMPLE: measure directly or see name
 x_offset = 1
 y_offset = 0 # This is the correct alignment for the sequence - (8,7) is central LED
 x_initial = 0
 y_initial = 0 # Potentially can finely tune these
+PIX_SIZE = 1150e-9 (measured for v3_47)
 
 System parameters for V2 microscope:
 LED2SAMPLE = 80 # Distance from LED array to the sample, mm (larger distance leads to closer overlapping Fourier circles)

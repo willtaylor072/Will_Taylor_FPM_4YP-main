@@ -125,15 +125,21 @@ def get_approx_offset(profile):
 feature = [6,1] 
 # feature = [7,6]
 
+save = True
+
 # Image name is name of folder where magnitude.png is
 # Pixel size in reconstructed image is original pixel size (in microns) divided by upsampling ratio
 # (If pixel size is uncertain: select exact feature start and end by zooming into plot and using vertical lines,
 # then uncomment the first print statement below)
 # Angle is rotation degrees acw
 
-image_name = 'v2_usaf_taped'
-pixel_size = 0.205 
-angle = 2.6
+image_name = 'v3_usaf_47'
+pixel_size = 0.23
+angle = -0.7
+
+# image_name = 'v2_usaf_taped'
+# pixel_size = 0.205 
+# angle = 2.6
 
 # image_name = 'v2_usaf'
 # pixel_size = 0.271 
@@ -151,10 +157,13 @@ angle = 2.6
 # pixel_size = 0.286
 # angle = 0
 
-# Prepare image
+# # Select other image to measure pixel size
+# image_pil = Image.open('data/library/usaf_v3_58/image_0.png')
+# angle = -0.5
+# pixel_size = 1.14
+
 image_pil = Image.open(os.path.join('results/library',image_name,'magnitude.png'))
 image_pil_rotated = image_pil.rotate(angle,resample=Image.BICUBIC,expand=False)
-# image_pil_rotated.save(os.path.join(image_folder,'rotation_test.png')) # Check rotation
 image = np.array(image_pil_rotated) # Convert to numpy array
 
 # Find line_width
@@ -251,8 +260,9 @@ axes[1].annotate(f'Central MSE: {error:.3f}, Average MSE: {mean_error:.3f}',[0,-
 axes[1].legend(loc='upper left')
 
 # Save to results folder
-# save_name = f'{feature}_{'vertical' if vertical else 'horizontal'}.png'
-# plt.savefig(os.path.join('results/library',image_name,save_name))
+if save:
+    save_name = f'{feature}_{'vertical' if vertical else 'horizontal'}.png'
+    plt.savefig(os.path.join('results/library',image_name,save_name))
 
 plt.show()
 
