@@ -24,7 +24,7 @@ results_folder = 'results/recent' # For saving results
 # Imaging parameters
 grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
 img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
-brightfield_preview = False # Preview bright or darkfield
+brightfield_preview = True # Preview bright or darkfield
 preview_exposure = int(50e3) if brightfield_preview else int(500e3) # In microseconds for preview
 brightfield_exposure = int(50e3)  # In microseconds for brightfield
 fpm_exposure = int(500e3)  # In microseconds for FPM image capture
@@ -32,6 +32,13 @@ led_color = 'white' # Illumination color
 WLENGTH = 550e-9 # Central wavelength of LED light, m, 550nm for white, 630nm for red, 460nm for blue
 x_coords,y_coords = fpm.LED_spiral(grid_size,x_offset=1,y_offset=0) # LED sequence (ensure first LED is aligned with optical axis)
 reconstruction = False # Do reconstruction 
+
+# Image gathering parameters
+num_images = grid_size**2 # Total number of FPM images
+# crop_start_x = int(1456/2 - img_size/2) # These crop values ensure images are in center of camera FOV
+# crop_start_y = int(1088/2 - img_size/2)
+crop_start_x = 1000
+crop_start_y = 100
 
 # Set parameters for reconstruction algorithm
 options = {
@@ -87,12 +94,6 @@ axes[0].set_aspect(1456 / 1088)  # Aspect ratio for the full frame
 axes[1].set_aspect('equal')  # Aspect ratio for the cropped frame is square
 axes[0].set_title("Full Camera FOV")
 axes[1].set_title("Cropped Camera Region")
-
-# Image gathering parameters
-num_images = grid_size**2 # Total number of FPM images
-crop_start_x = int(1456/2 - img_size/2) # These crop values ensure images are in center of camera FOV
-crop_start_y = int(1088/2 - img_size/2)
-
 
 # Initialise LED array
 led_matrix = RPiLedMatrix()

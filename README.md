@@ -32,6 +32,10 @@ estimated_image = object_cropped * pupil # Correct method (actual ptychography)
 
 Momentum may be used to speed up recovery process.
 
+If the darkfield has light leaking into it, chose the crop region where there is most light. This seems to 
+make the darkfield images have the best contrast (see data_grids 64_edge vs 62_wider). Doesn't help when LED to sample distance
+becomes too big... Think this is all caused by the aperture under the sample. 
+
 #############################################
 
 Optical parameters:
