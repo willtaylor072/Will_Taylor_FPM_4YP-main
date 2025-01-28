@@ -11,7 +11,7 @@ from scipy.fft import fft2, ifft2, fftshift, ifftshift
     
 # Generate coordinates to turn on LEDs in a spiral pattern, moving right up left down right up left down....
 # 0,0 is bottom left LED when rotation is 135 degrees. Can use offsets to center the starting point with optical axis. 
-# N.b. If offsets are non zero, we can't use entire 16x16 LED array - reccomended not to use offsets but just adjust wavevectors.
+# N.b. If offsets are non zero, we can't use entire 16x16 LED array.
 def LED_spiral(n, x_offset=0, y_offset=0):
     
     # Initialize the arrays to store the x and y coordinates

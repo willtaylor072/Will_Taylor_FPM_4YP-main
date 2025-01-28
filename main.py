@@ -28,11 +28,10 @@ brightfield_preview = True # Preview bright or darkfield
 preview_exposure = int(50e3) if brightfield_preview else int(500e3) # In microseconds for preview
 brightfield_exposure = int(50e3)  # In microseconds for brightfield
 fpm_exposure = int(500e3)  # In microseconds for FPM image capture
-led_delay = 0.1 # In seconds for pause between FPM images to switch LED
 led_color = 'white' # Illumination color
 WLENGTH = 550e-9 # Central wavelength of LED light, m, 550nm for white, 630nm for red, 460nm for blue
-x_coords,y_coords = fpm.LED_spiral(grid_size,x_offset=1,y_offset=1) # LED sequence (originally started with 7,7 but due to misalignment now start with 8,8)
-
+x_coords,y_coords = fpm.LED_spiral(grid_size,x_offset=1,y_offset=0) # LED sequence (ensure first LED is aligned with optical axis)
+reconstruction = False # Do reconstruction 
 
 # Set parameters for reconstruction algorithm
 options = {
@@ -49,8 +48,6 @@ LED2SAMPLE = 80 # Distance from LED array to the sample, 80mm (larger distance l
 LED_P = 3.3 # LED pitch, mm
 NA = 0.1 # Objective numerical aperture
 PIX_SIZE = 1025e-9 # Pixel size on object plane, m
-# x_initial = -3.3 # x distance from first LED to optical axis, mm (+ve if first LED is to right of optical axis)
-# y_initial = 3.3 # y distance from first LED to optical axis, mm (+ve if first LED is above optical axis)
 x_initial = y_initial = 0 # We adjust the sequence instead so these are close to zero (first LED close to optical axis)
 
 # Miscelaneous 
@@ -99,7 +96,7 @@ crop_start_y = int(1088/2 - img_size/2)
 
 # Initialise LED array
 led_matrix = RPiLedMatrix()
-led_matrix.set_rotation(45) # Ensure 0,0 is bottom left pixel and as shown on microscope
+led_matrix.set_rotation(135) # Ensure 0,0 is bottom left pixel and as shown on microscope
 
 # Initialize camera
 camera = Picamera2()
@@ -181,7 +178,6 @@ fig.canvas.mpl_disconnect('close_event')
 
 # Take a brightfield image (already have brightfield LEDs on)
 camera.set_controls({"ExposureTime": brightfield_exposure})
-# time.sleep(0.5)
 brightfield = camera.capture_array()[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size] # img_size x img_size RGB image
 brightfield_pil = Image.fromarray(brightfield).convert('L') # Grayscale pillow image
 brightfield_pil.save(os.path.join(data_folder,'brightfield.png'), format='PNG') # Save as png
@@ -208,7 +204,8 @@ camera.set_controls({"ExposureTime": fpm_exposure})
 
 for i in range(num_images):
     led_matrix.show_pixel(x_coords[i], y_coords[i], brightness=1, color=led_color)
-    time.sleep(led_delay)  # Short pause for LED to turn on (possibly can remove)
+    if i == 0:
+        time.sleep(0.5)  # Only need on first iteration 
     image = camera.capture_array()[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size] # img_size x img_size RGB image
     image_pil = Image.fromarray(image).convert('L') # Grayscale pillow image
     img_path = os.path.join(data_folder, f'image_{i}.png') # Create path name
@@ -231,68 +228,68 @@ camera.close()
 
 ####################################################################################################################
 # Reconstruction
+if reconstruction:
+    # Derived variables
+    F_CUTOFF = 2*NA/WLENGTH # Highest spatial frequency we can resolve in the optical system due to diffraction, lp/m
+    F_SAMPLING = 1/PIX_SIZE # Sampling frequency (based on sensor pixel size and magnification), lp/m
+    # Nyquist sampling criterion: sampling_ratio >2 -> oversampling (good), sampling_ratio <2 -> undersampling (aliasing may occur)
+    SAMPLING_RATIO = F_SAMPLING / F_CUTOFF # Ensure above 2
+    # print(f'Sampling ratio: {SAMPLING_RATIO}')
+    sampling_size = 1/(img_size*PIX_SIZE) # Distance between discrete points in the Fourier domain (used to scale wavevectors for indexing)
+    x_abs = (x_coords - x_coords[0]) * LED_P + x_initial # x distances of LEDs from first LED and optical axis, mm
+    y_abs = (y_coords - y_coords[0]) * LED_P + y_initial # y distances
 
-# Derived variables
-F_CUTOFF = 2*NA/WLENGTH # Highest spatial frequency we can resolve in the optical system due to diffraction, lp/m
-F_SAMPLING = 1/PIX_SIZE # Sampling frequency (based on sensor pixel size and magnification), lp/m
-# Nyquist sampling criterion: sampling_ratio >2 -> oversampling (good), sampling_ratio <2 -> undersampling (aliasing may occur)
-SAMPLING_RATIO = F_SAMPLING / F_CUTOFF # Ensure above 2
-# print(f'Sampling ratio: {SAMPLING_RATIO}')
-sampling_size = 1/(img_size*PIX_SIZE) # Distance between discrete points in the Fourier domain (used to scale wavevectors for indexing)
-x_abs = (x_coords - x_coords[0]) * LED_P + x_initial # x distances of LEDs from first LED and optical axis, mm
-y_abs = (y_coords - y_coords[0]) * LED_P + y_initial # y distances
+    # Size of reconstructed image (for given parameters upsampling is between 2 and 5 depending on grid_size)
+    # Can do seperately x and y if image is not square
+    # upsampling_ratio = fpm.calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, sampling_size)
+    upsampling_ratio = 5 # Or can use a set value
+    obj_size = upsampling_ratio * img_size
+    print(f'Upsampling ratio: {upsampling_ratio}; Reconstructed Pixel Size: {int(1e9*PIX_SIZE/(upsampling_ratio))}nm')
 
-# Size of reconstructed image (for given parameters upsampling is between 2 and 5 depending on grid_size)
-# Can do seperately x and y if image is not square
-# upsampling_ratio = fpm.calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, sampling_size)
-upsampling_ratio = 5 # Or can use a set value
-obj_size = upsampling_ratio * img_size
-print(f'Upsampling ratio: {upsampling_ratio}; Reconstructed Pixel Size: {int(1e9*PIX_SIZE/(upsampling_ratio))}nm')
+    # LED wavevectors - scaled for use in Fourier domain. To get true wavevectors multiply by sampling size
+    kx,ky = fpm.calculate_wavevectors(x_abs, y_abs, LED2SAMPLE, WLENGTH, sampling_size)
 
-# LED wavevectors - scaled for use in Fourier domain. To get true wavevectors multiply by sampling size
-kx,ky = fpm.calculate_wavevectors(x_abs, y_abs, LED2SAMPLE, WLENGTH, sampling_size)
+    # Initial pupil function (binary mask)
+    # x,y is our normalised frequency domain for the images, cutoff frequency = 1 (both x and y)
+    x,y = np.meshgrid(np.linspace(-SAMPLING_RATIO,SAMPLING_RATIO,img_size), np.linspace(-SAMPLING_RATIO,SAMPLING_RATIO,img_size))
+    theta,r = np.arctan2(y,x), np.sqrt(x**2 + y**2) # Polar coordinates
+    pupil_radius = (1/SAMPLING_RATIO) * (img_size/2) # In pixels
+    pupil_binary = r<1 # Binary mask for frequencies below cutoff frequency (higher frequencies cannot be resolved due to diffraction)
 
-# Initial pupil function (binary mask)
-# x,y is our normalised frequency domain for the images, cutoff frequency = 1 (both x and y)
-x,y = np.meshgrid(np.linspace(-SAMPLING_RATIO,SAMPLING_RATIO,img_size), np.linspace(-SAMPLING_RATIO,SAMPLING_RATIO,img_size))
-theta,r = np.arctan2(y,x), np.sqrt(x**2 + y**2) # Polar coordinates
-pupil_radius = (1/SAMPLING_RATIO) * (img_size/2) # In pixels
-pupil_binary = r<1 # Binary mask for frequencies below cutoff frequency (higher frequencies cannot be resolved due to diffraction)
+    # Initial object estimate (using first image)
+    img = np.sqrt(images[:,:,0]) # Amplitude of central image
+    F_img = fpm.FT(img) # Fourier transformed image (with shift)
+    F_img = F_img * pupil_binary # Apply pupil function
+    pad_width = int((obj_size - img_size) / 2) # Padding to make correct size
+    obj = np.pad(F_img,pad_width,'constant',constant_values=0) # Initial object in frequency domain
 
-# Initial object estimate (using first image)
-img = np.sqrt(images[:,:,0]) # Amplitude of central image
-F_img = fpm.FT(img) # Fourier transformed image (with shift)
-F_img = F_img * pupil_binary # Apply pupil function
-pad_width = int((obj_size - img_size) / 2) # Padding to make correct size
-obj = np.pad(F_img,pad_width,'constant',constant_values=0) # Initial object in frequency domain
+    # Do reconstruction (main code)
+    rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=None)
 
-# Do reconstruction (main code)
-rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=None)
+    # Keep plot open
+    plt.ioff()
+    plt.show() 
 
-# Keep plot open
-plt.ioff()
-plt.show() 
+    ###########################################################################################
+    # Save results
 
-###########################################################################################
-# Save results
+    # Recovered object
+    obj_mag = np.abs(rec_obj) # Magnitude
+    obj_arg = np.angle(rec_obj) # Phase
 
-# Recovered object
-obj_mag = np.abs(rec_obj) # Magnitude
-obj_arg = np.angle(rec_obj) # Phase
+    # Recovered pupil
+    pupil_mag = np.abs(rec_pupil)
+    pupil_arg = np.angle(rec_pupil)
 
-# Recovered pupil
-pupil_mag = np.abs(rec_pupil)
-pupil_arg = np.angle(rec_pupil)
+    obj_mag = obj_mag / np.max(np.abs(obj_mag))
+    obj_mag = (obj_mag * 255).astype(np.uint8)
+    obj_mag = Image.fromarray(obj_mag)
+    obj_mag.save('results/recent/magnitude.png')
 
-obj_mag = obj_mag / np.max(np.abs(obj_mag))
-obj_mag = (obj_mag * 255).astype(np.uint8)
-obj_mag = Image.fromarray(obj_mag)
-obj_mag.save('results/recent/magnitude.png')
+    obj_arg = plt.cm.hot(obj_arg)  # Use colormap
+    obj_arg = (obj_arg * 255).astype(np.uint8)
+    obj_arg = Image.fromarray(obj_arg)
+    obj_arg.save('results/recent/phase.png',format='PNG')
 
-obj_arg = plt.cm.hot(obj_arg)  # Use colormap
-obj_arg = (obj_arg * 255).astype(np.uint8)
-obj_arg = Image.fromarray(obj_arg)
-obj_arg.save('results/recent/phase.png',format='PNG')
-
-bf = Image.open(os.path.join(data_folder,'brightfield.png'))
-bf.save('results/recent/brightfield.png')
+    bf = Image.open(os.path.join(data_folder,'brightfield.png'))
+    bf.save('results/recent/brightfield.png')
