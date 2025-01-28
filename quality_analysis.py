@@ -122,8 +122,8 @@ def get_approx_offset(profile):
             return i
 
 # Select feature to analyse, [group, element]. [7,6] is smallest, [6,1] is biggest
-# feature = [6,1] 
-feature = [7,6]
+feature = [6,1] 
+# feature = [7,6]
 
 # Image name is name of folder where magnitude.png is
 # Pixel size in reconstructed image is original pixel size (in microns) divided by upsampling ratio
@@ -164,7 +164,8 @@ print(f"Line width for group {feature[0]}, element {feature[1]}: {line_width:.2f
 
 # Get line profile and start/end coordinate from helper function
 profile,coords = pixel_slice_selection(image,feature[0],feature[1])
-profile /= 255 # Range should be 0-1
+profile /= 255 # Range should be 0-1 (but don't normalise with image information!)
+vertical = True if coords["end"][1] == coords["start"][1] else False # Flag for vertical/horizontal line
 
 # Calculate pixel size by selecting precisely start and end of feature
 print(f'Number of pixels: {len(profile)}, 5 line width: {round(5*line_width,3)}um, pixel size: {round(5*line_width/len(profile),3)}um')
@@ -175,9 +176,9 @@ print(f'Number of pixels: {len(profile)}, 5 line width: {round(5*line_width,3)}u
 approx_offset = get_approx_offset(profile)
 
 # Test offsets around the approx offset
-search_dist = round(len(profile)/5) # Number of values to search either side of offset
-offsets = np.linspace(approx_offset-search_dist,approx_offset+search_dist,search_dist*2+1)
-errors = np.zeros(len(offsets)) # To store errors
+search_range = round(len(profile)/5) # Number of values to search either side of offset
+offsets = np.linspace(approx_offset-search_range,approx_offset+search_range,search_range*2+1)
+errors = np.zeros(len(offsets)) # To store errors at each adjusted offset
 
 for idx, offset in enumerate(offsets):
     errors[idx],_,_ = get_error(profile,pixel_size,line_width,offset)
@@ -192,13 +193,52 @@ optimal_offset = offsets[np.argmin(errors)]
 # Find the profiles and distances using the optimal offset
 error,distances,theoretical_profile = get_error(profile,pixel_size,line_width,optimal_offset)
 
+
+### Repeat twice either side of the profile to average across the line section ###
+lines_per_side = 3 # Number of lines per side of central line
+pixel_offset = round(line_width/pixel_size*0.9 * 5/(lines_per_side*2+1)) # Line length ~ line width * 5
+profile = profile_line(image,coords["start"],coords["end"])/255
+
+# Create vertical and horizontal offset profiles
+profiles = [profile]  # Initialize with the original profile
+
+if vertical:
+    # Calculate perpendicular offset vector for vertical case
+    offset_vector = np.array([0, pixel_offset])  # Only y changes for vertical offset
+else:
+    # Calculate perpendicular offset vector for horizontal case
+    offset_vector = np.array([pixel_offset, 0])  # Only x changes for horizontal offset
+
+# Find profile lines on either side of center
+for i in range(1, 1+lines_per_side): 
+    # Positive offset line
+    start_pos = np.array(coords["start"]) + i * offset_vector
+    end_pos = np.array(coords["end"]) + i * offset_vector
+    profiles.append(profile_line(image, start_pos, end_pos)/255)
+
+    # Negative offset line
+    start_neg = np.array(coords["start"]) - i * offset_vector
+    end_neg = np.array(coords["end"]) - i * offset_vector
+    profiles.append(profile_line(image, start_neg, end_neg)/255)
+
+profile_errors = []
+for profile in profiles:
+    error,_,_ = get_error(profile,pixel_size,line_width,optimal_offset)
+    profile_errors.append(error)
+
+mean_error = np.mean(profile_errors)
+
 # Plot results
 fig, axes = plt.subplots(1, 2, figsize=(10, 5))
 
 axes[0].imshow(image,cmap='gray')
-y_values = [coords['start'][0], coords['end'][0]]
-x_values = [coords['start'][1], coords['end'][1]]
-axes[0].plot(x_values, y_values, color='red')
+# Just draw the edge and central lines
+if vertical:
+    x_starts = [coords["start"][1] + lines_per_side*i*pixel_offset for i in range(-1,2)]
+    axes[0].vlines(x_starts,coords["start"][0],coords["end"][0],colors=['black','red','black'])
+else:
+    y_starts = [coords["start"][0] + lines_per_side*i*pixel_offset for i in range(-1,2)]
+    axes[0].hlines(y_starts,coords["start"][1],coords["end"][1],colors=['black','red','black'])
 axes[0].set_title(f'{image_name}, group: {feature[0]}, element: {feature[1]}')
 
 axes[1].plot(distances,profile,label='Measured profile') # Plot distance on x axis and intensity on y
@@ -207,12 +247,12 @@ axes[1].set_title('Measured vs Actual line profile')
 axes[1].vlines((0,5*line_width),-0.1,1.1,colors='black') # Indicate where features start and end
 plt.xlabel('Distance from start of feature (microns)')
 plt.ylabel('Intensity')
-axes[1].annotate(f'MSE: {error:.3f}',[0,-0.1])
+axes[1].annotate(f'Central MSE: {error:.3f}, Average MSE: {mean_error:.3f}',[0,-0.1])
 axes[1].legend(loc='upper left')
 
 # Save to results folder
-save_name = f'{feature}_{'vertical' if coords["end"][1] == coords["start"][1] else 'horizontal'}.png'
-plt.savefig(os.path.join('results/library',image_name,save_name))
+# save_name = f'{feature}_{'vertical' if vertical else 'horizontal'}.png'
+# plt.savefig(os.path.join('results/library',image_name,save_name))
 
 plt.show()
 
