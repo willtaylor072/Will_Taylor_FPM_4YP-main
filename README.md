@@ -40,6 +40,8 @@ becomes too big... Think this is all caused by the aperture under the sample.
 
 Squiggly artefacts in reconstructed images are very sensitive to input k-vectors -> i.e. LED to sample distance and initial LED position
 
+Exposure time of 0.5s is good
+
 #############################################
 
 Optical parameters:

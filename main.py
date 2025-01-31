@@ -35,10 +35,10 @@ reconstruction = False # Do reconstruction
 
 # Image gathering parameters
 num_images = grid_size**2 # Total number of FPM images
-# crop_start_x = int(1456/2 - img_size/2) # These crop values ensure images are in center of camera FOV
-# crop_start_y = int(1088/2 - img_size/2)
-crop_start_x = 1000
-crop_start_y = 100
+crop_start_x = int(1456/2 - img_size/2) # These crop values ensure images are in center of camera FOV
+crop_start_y = int(1088/2 - img_size/2)
+# crop_start_x = 1000
+# crop_start_y = 100
 
 # Set parameters for reconstruction algorithm
 options = {
