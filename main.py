@@ -51,13 +51,16 @@ options = {
 }
 
 # Optical system parameters
-LED2SAMPLE = 80 # Distance from LED array to the sample, 80mm (larger distance leads to closer overlapping Fourier circles)
+LED2SAMPLE = 80 # Distance from LED array to the sample, (shorter distance leads to greater overlap of adjacent spectra)
 LED_P = 3.3 # LED pitch, mm
 NA = 0.1 # Objective numerical aperture
 PIX_SIZE = 1025e-9 # Pixel size on object plane, m
 x_initial = y_initial = 0 # We adjust the sequence instead so these are close to zero (first LED close to optical axis)
 
-# Miscelaneous 
+# Tuning of LED2SAMPLE, as well as x_initial and y_initial can make a big difference (other parameters not so much)
+# Also ensure the pixel size is correctly measured (can use quality_testing with USAF target, or info in README.txt)
+
+## Miscelaneous 
 
 # Turn on fan
 def fan_on():

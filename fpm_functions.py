@@ -382,7 +382,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
                 pupil_update = numerator / denominator
                 pupil += pupil_update
                 
-            error[i] = np.mean((exit_wave-update_wave)**2)
+            error[i] = np.mean((abs(exit_wave)-abs(update_wave))**2)
       
             # LED position (kx,ky) correction for image we just used, algorithm 1
             if LED_correction == 1:

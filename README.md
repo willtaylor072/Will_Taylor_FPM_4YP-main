@@ -44,15 +44,45 @@ Exposure time of 0.5s is good
 
 #############################################
 
+BEST RESULTS EVER OBTAINED
+setup: 
+v3 microscope with shortest LED to sample distance
+aperture under slide: 3mm (widening to 3.5mm reduced quality)
+15x15 grid, white LED light
+exposure = 0.5s
+x_offset = 1 
+y_offset = 0 - first LED was (8,7)
+
+data: usaf_v3_47 
+
+Optimised paramters:
+LED2SAMPLE = 50 (not 47!)
+LED_P = 3.3
+NA = 0.1
+PIX_SIZE = 1150e-9
+WLENGTH = 550e-9
+x_initial = 0.9
+y_initial = -0.5
+
+algorithm:
+ePIE
+alpha = beta = 1
+LED correction off
+iterations = 8 (it was repeated with 15 but made no visible improvement)
+
+result: v3_usaf_best
+
+#############################################
+
 Optical parameters:
 
 System parameters for V3 microscope:
-LED2SAMPLE: measure directly or see name
+LED2SAMPLE: measure directly or see name (closest distance is 50mm (not 47 as the name suggests))
 x_offset = 1
 y_offset = 0 # This is the correct alignment for the sequence - (8,7) is central LED
-x_initial = 0
-y_initial = 0 # Potentially can finely tune these
-PIX_SIZE = 1150e-9 (measured for v3_47)
+x_initial = 0.9
+y_initial = -0.5 # These can be finely tuned in sensitivity_testing.ipynb
+PIX_SIZE = 1150e-9 (measured for usaf_v3_47)
 
 System parameters for V2 microscope:
 LED2SAMPLE = 80 # Distance from LED array to the sample, mm (larger distance leads to closer overlapping Fourier circles)
@@ -71,4 +101,3 @@ PIX_SIZE = 1090e-9 # Pixel size on object plane, m
 WLENGTH = 550e-9 # Central wavelength of LED light, m
 x_initial = -2.83 # x distance from first LED to optical axis, mm (+ve if first LED is to right of optical axis)
 y_initial = -3.39 # y distance from first LED to optical axis, mm (+ve if first LED is above optical axis)
-
