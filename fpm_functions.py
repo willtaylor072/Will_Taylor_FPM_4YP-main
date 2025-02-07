@@ -352,8 +352,8 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             # ePIE update
             elif update_method == 2:
                 # Momentum
-                # alpha = 0.4*(1+iter)
-                # beta = 0.4*(1+iter)
+                # alpha = 0.3 + iter * 0.2
+                # beta = 0.3 + iter * 0.2
                 
                 # Object update
                 numerator = alpha * np.conj(pupil) * (update_wave-exit_wave)

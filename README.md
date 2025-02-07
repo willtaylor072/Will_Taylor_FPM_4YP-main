@@ -32,15 +32,21 @@ estimated_image = object_cropped * pupil # Correct method (actual ptychography)
 
 Momentum may be used to speed up recovery process.
 
-If the darkfield has light leaking into it, chose the crop region where there is most light. This seems to 
-make the darkfield images have the best contrast (see data_grids 64_edge vs 62_wider). Doesn't help when LED to sample distance
-becomes too big... Think this is all caused by the aperture under the sample. 
-
 (For usaf_v3_64 the aperture under the sample was widened from 3mm to 3.4mm which made the darkfield images higher contrast (less leakge))
+The hole under the sample should be taped to 1.25x1.67mm to match the camera FOV and not let any unecessary light into the system from the 
+LEDs.
 
 Squiggly artefacts in reconstructed images are very sensitive to input k-vectors -> i.e. LED to sample distance and initial LED position
 
-Exposure time of 0.5s is good
+Exposure time of 0.5s is good for USAF
+
+Main aberrations are spherical (and usually some defocus)
+
+# TEST
+For natural samples: longer exposure might yield better results. Also LED correction seems to make far fewer adjustments to wavevectors
+compared to the USAF testing.
+
+Sample_1 is dried saliva
 
 #############################################
 
