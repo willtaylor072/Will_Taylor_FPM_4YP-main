@@ -50,7 +50,7 @@ Sample_1 is dried saliva
 
 #############################################
 
-BEST RESULTS EVER OBTAINED
+BEST RESULTS OBTAINED
 setup: 
 v3 microscope with shortest LED to sample distance
 aperture under slide: 3mm (widening to 3.5mm reduced quality)

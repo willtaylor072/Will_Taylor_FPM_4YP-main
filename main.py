@@ -14,48 +14,49 @@ import gpiod
 import fpm_functions as fpm 
 importlib.reload(fpm) # Reload
 
+# This script will always do image gathering, and then can optionally do reconstruction as well
+# If reconstruction is poor, or you would like to change parameters, use reconstruction.ipynb after gathering images
+
 ##########################################################################################################
 # Key setup variables
 
 # Folders
-data_folder = 'data/recent' # For saving data images (diagnostics only)
+data_folder = 'data/recent' # For saving data images
 results_folder = 'results/recent' # For saving results
+
+reconstruction = False # Do reconstruction after gathering images
 
 # Imaging parameters
 grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
 img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
 brightfield_preview = True # Preview bright or darkfield
 preview_exposure = int(50e3) if brightfield_preview else int(500e3) # In microseconds for preview
-brightfield_exposure = int(50e3)  # In microseconds for brightfield
-fpm_exposure = int(500e3)  # In microseconds for FPM image capture
+fpm_exposure = int(800e3)  # In microseconds for FPM image capture
 led_color = 'white' # Illumination color
 WLENGTH = 550e-9 # Central wavelength of LED light, m, 550nm for white, 630nm for red, 460nm for blue
 x_coords,y_coords = fpm.LED_spiral(grid_size,x_offset=1,y_offset=0) # LED sequence (ensure first LED is aligned with optical axis)
-reconstruction = False # Do reconstruction 
-
-# Image gathering parameters
-num_images = grid_size**2 # Total number of FPM images
-crop_start_x = int(1456/2 - img_size/2) # These crop values ensure images are in center of camera FOV
-crop_start_y = int(1088/2 - img_size/2)
-# crop_start_x = 1000
-# crop_start_y = 100
 
 # Set parameters for reconstruction algorithm
 options = {
     'max_iter': 8, # Number of iterations
     'alpha': 1, # Regularisation parameter for object update
     'beta': 1, # Regularisation parameter for pupil update
-    'plot_mode': 3, # 0, off; 2, plot every image; 3, plot every iteration (notebook version)
+    'plot_mode': 1, # 0, plot only at end; 1, plot every iteration
     'LED_correction': 0, # 0, off; 1, accurate; 2, fast. Update wavevectors during reconstruction 
-    'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE
+    'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE. Update method, ePIE reccomended
 }
 
 # Optical system parameters
-LED2SAMPLE = 80 # Distance from LED array to the sample, (shorter distance leads to greater overlap of adjacent spectra)
+LED2SAMPLE = 50 # Distance from LED array to the sample, (shorter distance leads to greater overlap of adjacent spectra)
 LED_P = 3.3 # LED pitch, mm
 NA = 0.1 # Objective numerical aperture
-PIX_SIZE = 1025e-9 # Pixel size on object plane, m
-x_initial = y_initial = 0 # We adjust the sequence instead so these are close to zero (first LED close to optical axis)
+PIX_SIZE = 1150e-9 # Pixel size on object plane, m. Directly measured for V3
+x_initial = y_initial = 0 # Offset of first LED to optical axis (can be tuned slightly if reconstruction has crease like artefacts)
+
+# Image gathering parameters
+num_images = grid_size**2 # Total number of FPM images
+crop_start_x = int(1456/2 - img_size/2) # These crop values ensure images are in center of camera FOV
+crop_start_y = int(1088/2 - img_size/2)
 
 # Tuning of LED2SAMPLE, as well as x_initial and y_initial can make a big difference (other parameters not so much)
 # Also ensure the pixel size is correctly measured (can use quality_testing with USAF target, or info in README.txt)
@@ -180,23 +181,27 @@ fig.canvas.mpl_disconnect('close_event')
 #########################################################################################################
 # Start taking images now that sample is aligned
 
-# Take a brightfield image (already have brightfield LEDs on)
-camera.set_controls({"ExposureTime": brightfield_exposure})
+# Take a brightfield image (or darkfield if chosen)
 brightfield = camera.capture_array()[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size] # img_size x img_size RGB image
 brightfield_pil = Image.fromarray(brightfield).convert('L') # Grayscale pillow image
 brightfield_pil.save(os.path.join(data_folder,'brightfield.png'), format='PNG') # Save as png
 brightfield = np.array(brightfield_pil) # Keep as array
 
+# Define the data grid (single large grayscale image for visualization)
+downsampled_size = img_size // 15  # Each image should be this small
+data_grid = np.zeros((15 * downsampled_size, 15 * downsampled_size), dtype=np.uint8)
+
 # Update main figure to indicate FPM process has begun
-# Axis 0 will be now be brightfield image, axis 1 will be reconstruction 
+# Axis 0 will be now be brightfield image, axis 1 will be data grid which will fill in as we take images
 axes[0].cla()
 axes[1].cla()
 axes[0].set_aspect('equal') 
 axes[1].set_aspect('equal')
 axes[0].set_title("Brightfield")
-axes[1].set_title("Reconstruction")
+axes[1].set_title("Data Grid")
+
 axes[0].imshow(brightfield,cmap='gray')
-axes[1].imshow(placeholder_cropped,cmap='gray') # Use placeholder from earlier since we don't have reconstruction yet
+data_grid_display = axes[1].imshow(data_grid, cmap='gray', vmin=0, vmax=255)
 
 # Refresh
 plt.draw()   
@@ -218,12 +223,28 @@ for i in range(num_images):
     image = np.array(image_pil) # Convert to array for reconstruction
     images[:,:,i] = image # Insert into images array
     
+    # Downsample image for the data grid
+    downsampled = np.array(image_pil.resize((downsampled_size, downsampled_size)))
+
+    # Determine position in the 15x15 grid
+    row = y_coords[i] * downsampled_size  # Ensure correct indexing
+    col = (x_coords[i]-1) * downsampled_size
+
+    # Insert into the data grid
+    if 0 <= row < data_grid.shape[0] and 0 <= col < data_grid.shape[1]:
+        data_grid[row:row + downsampled_size, col:col + downsampled_size] = downsampled
+
+    # Update UI using set_data
+    data_grid_display.set_data(data_grid)  
+    plt.pause(0.01) 
+
     # Status message
     progress = int((i+1)/num_images * 100)
     sys.stdout.write(f'\r Image Gathering Progress: {progress}%') # Write to same line
     sys.stdout.flush()
 
 print('\n Image Gathering Done!')
+plt.imsave('data/data_grids/recent.png',data_grid,cmap='gray')
 
 # Turn off LED matrix and camera             
 led_matrix.off()
@@ -232,7 +253,11 @@ camera.close()
 
 ####################################################################################################################
 # Reconstruction
+
 if reconstruction:
+    axes[0].imshow(data_grid,cmap='gray') # Move data grid to left axis as we will use right axis to show reconstruction
+    axes[0].set_title('Data Grid')
+    
     # Derived variables
     F_CUTOFF = 2*NA/WLENGTH # Highest spatial frequency we can resolve in the optical system due to diffraction, lp/m
     F_SAMPLING = 1/PIX_SIZE # Sampling frequency (based on sensor pixel size and magnification), lp/m
@@ -295,5 +320,6 @@ if reconstruction:
     obj_arg = Image.fromarray(obj_arg)
     obj_arg.save('results/recent/phase.png',format='PNG')
 
+    # Brightfield (or darkfield)
     bf = Image.open(os.path.join(data_folder,'brightfield.png'))
     bf.save('results/recent/brightfield.png')

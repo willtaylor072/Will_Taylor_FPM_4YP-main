@@ -102,9 +102,9 @@ def FT(x):
 def IFT(x):
     return ifft2(ifftshift(x))
 
-# Plotting for visualising reconstruction (regular python version, 1 axis to plot on)
+# Plotting for visualising reconstruction (regular python version, single axis to plot on)
 def plot_py(fig,axes,obj):
-    # We use axes[1] to show object (axis[0] is for brightfield reference)
+    # We use axes[1] to show object
     axes[1].cla()  # Clear the current axes
     axes[1].imshow(np.abs(IFT(obj)), cmap='gray')
     axes[1].set_title('Currently reconstructed object')
@@ -202,9 +202,7 @@ def update_LED_positions_accurate(obj,img,pupil,kx,ky,img_size,obj_center,image_
         
     return kx,ky 
 
-# Modification of accurate algorithm to use a subrange to search for minimum error LED position.
-# CURRENTLY DOES NOT WORK - landscape is not smooth, so we don't converge using subranges
-# TODO: TRY NEW DEFINITION OF error = exit_wave - update_wave
+# Modification of accurate algorithm to use a subrange to search for minimum error LED position
 def update_LED_positions_fast(obj,img,pupil,kx,ky,img_size,obj_center,image_number,subrange_size=5):
     
     iteration_limit = 10 # Max number of re-center and search iterations
