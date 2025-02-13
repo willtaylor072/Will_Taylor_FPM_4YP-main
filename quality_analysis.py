@@ -4,6 +4,8 @@ import numpy as np
 import fpm_functions as fpm
 from skimage.measure import profile_line
 from skimage.filters import threshold_otsu
+from scipy.fft import fft, ifft
+from scipy.optimize import curve_fit
 import os
 
 #### This script is for checking the reconstruction quality of USAF target high resolution image ####
@@ -101,18 +103,45 @@ def get_error(profile,pixel_size,line_width,offset):
         return
     error /= num_points # To get mean
     
-    # Find a score for the gradient of the profile about the feature lines (at each of the six transitions)
-    gradients = []
-    edges = [line_width*i for i in range(6)] # Distances where transition occurs
-    indices = [np.argmin(np.abs(distances - edge)) for edge in edges] # Indices where the edge is found
-    for i in indices:
-        # 1st order central derivative of pixel intensity wrt distance
-        for dx in range(1,4): # Use some different widths for calculating derivative
-            gradients.append(abs((profile[i+dx] - profile[i-dx])/(distances[i+dx] - distances[i-dx])))
+    # # Find a score for the gradient of the profile about the feature lines (at each of the six transitions)
+    # gradients = []
+    # edges = [line_width*i for i in range(6)] # Distances where transition occurs
+    # indices = [np.argmin(np.abs(distances - edge)) for edge in edges] # Indices where the edge is found
+    # for i in indices:
+    #     # 1st order central derivative of pixel intensity wrt distance
+    #     for dx in range(1,4): # Use some different widths for calculating derivative
+    #         gradients.append(abs((profile[i+dx] - profile[i-dx])/(distances[i+dx] - distances[i-dx])))
     
-    gradient_score = np.mean(gradients) # Return average
-       
-    return error, gradient_score, distances, theoretical_profile
+    # gradient_score = np.mean(gradients) # Return average
+    
+    ## Estimate resolution
+    
+    # Get profiles within region 
+    cropped_profile_measured = []
+    cropped_profile_true = []
+    for i in range(len(profile)):
+        if distances[i] >= 0 and distances[i] < 5*line_width: # Within region
+            cropped_profile_measured.append(profile[i])
+            cropped_profile_true.append(theoretical_profile[i])
+    
+    # theoretical profile * psf = measured profile, so we can deconvolve in Fourier domain
+    psf = ifft(fft(cropped_profile_measured)/(fft(cropped_profile_true)+1e-8))
+    psf = np.abs(psf) # Don't care about phase
+    psf = psf - np.min(psf)
+    psf /= np.max(psf) # Nomralise
+    
+    # def gaussian(x, a, x0, sigma):
+    #     """ Gaussian function for fitting the PSF """
+    #     return a * np.exp(-((x - x0) ** 2) / (2 * sigma ** 2))
+    
+    # """ Measure the Full Width at Half Maximum (FWHM) of the PSF """
+    # # Fit Gaussian to the PSF
+    # x = np.linspace(0, len(psf), len(psf))
+    # popt, _ = curve_fit(gaussian, x, psf, p0=[1, np.argmax(psf), 1])
+    # sigma = abs(popt[2])
+    # fwhm = 2.355 * sigma  # Convert Gaussian sigma to FWHM
+    
+    return error, psf, distances, theoretical_profile
 
 # Find the approx index of the first black line pixel in the feature
 def get_approx_offset(profile):
@@ -133,9 +162,6 @@ def get_approx_offset(profile):
 feature = [6,1] 
 # feature = [7,6]
 
-mode = 'plot' # Will plot figure and save
-# mode = 'data' # No plotting but saves data in .npy file
-
 # Image name is name of folder where magnitude.png is
 # Pixel size in reconstructed image is original pixel size (in microns) divided by upsampling ratio
 # (If pixel size is uncertain: select exact feature start and end by zooming into plot and using vertical lines,
@@ -146,7 +172,7 @@ mode = 'plot' # Will plot figure and save
 # pixel_size = 0.23
 # angle = -0.7
 
-image_name = 'v3_usaf_47_new'
+image_name = 'v3_usaf_best'
 pixel_size = 0.23
 angle = -1
 
@@ -203,7 +229,7 @@ offsets = np.linspace(approx_offset-search_range,approx_offset+search_range,sear
 errors = np.zeros(len(offsets)) # To store errors at each adjusted offset
 
 for idx, offset in enumerate(offsets):
-    errors[idx],_,_,_ = get_error(profile,pixel_size,line_width,offset)
+    errors[idx],_,_,_ = get_error(profile,pixel_size,line_width,int(offset))
 
 optimal_offset = offsets[np.argmin(errors)]
 
@@ -213,12 +239,15 @@ optimal_offset = offsets[np.argmin(errors)]
 # ax.vlines([approx_offset,optimal_offset],0,1,['black','red'])   
 
 # Find the profile and distances using the optimal offset (used for plotting)
-error,gradient,distances,theoretical_profile = get_error(profile,pixel_size,line_width,optimal_offset)
+error,psf,distances,theoretical_profile = get_error(profile,pixel_size,line_width,optimal_offset)
+
+plt.plot(psf)
+plt.show()
 
 
 ### Repeat either side of the profile to average across the line section ###
 lines_per_side = 3 # Number of lines per side of central line
-pixel_offset = round(line_width/pixel_size*0.7 * 5/(lines_per_side*2+1)) # Line length ~ line width * 5
+pixel_offset = round(line_width/pixel_size*0.7 * 5/(lines_per_side*2+1)) # Line length = line width * 5
 profile = profile_line(image,coords["start"],coords["end"])/255
 
 # Create vertical and horizontal offset profiles
@@ -256,40 +285,30 @@ mean_error = np.mean(profile_errors)
 mean_gradient = np.mean(profile_gradients)
 
 # Plot results
-if mode == 'plot':
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+fig, axes = plt.subplots(1, 2, figsize=(10, 5))
 
-    axes[0].imshow(image,cmap='gray')
-    # Just draw the edge and central lines
-    if vertical:
-        x_starts = [coords["start"][1] + lines_per_side*i*pixel_offset for i in range(-1,2)]
-        axes[0].vlines(x_starts,coords["start"][0],coords["end"][0],colors=['black','red','black'])
-    else:
-        y_starts = [coords["start"][0] + lines_per_side*i*pixel_offset for i in range(-1,2)]
-        axes[0].hlines(y_starts,coords["start"][1],coords["end"][1],colors=['black','red','black'])
-    axes[0].set_title(f'{image_name}, group: {feature[0]}, element: {feature[1]}')
+axes[0].imshow(image,cmap='gray')
+# Just draw the edge and central lines
+if vertical:
+    x_starts = [coords["start"][1] + lines_per_side*i*pixel_offset for i in range(-1,2)]
+    axes[0].vlines(x_starts,coords["start"][0],coords["end"][0],colors=['black','red','black'])
+else:
+    y_starts = [coords["start"][0] + lines_per_side*i*pixel_offset for i in range(-1,2)]
+    axes[0].hlines(y_starts,coords["start"][1],coords["end"][1],colors=['black','red','black'])
+axes[0].set_title(f'{image_name}, group: {feature[0]}, element: {feature[1]}')
 
-    axes[1].plot(distances,profile,label='Measured profile') # Plot distance on x axis and intensity on y
-    axes[1].plot(distances,theoretical_profile,label='True profile')
-    axes[1].set_title('Measured vs Actual line profile')
-    axes[1].vlines((0,5*line_width),-0.2,1.1,colors='black') # Indicate where features start and end
-    plt.xlabel('Distance from start of feature (microns)')
-    plt.ylabel('Intensity')
-    axes[1].annotate(f'Average MSE: {mean_error:.3f}',[0,-0.1])
-    axes[1].annotate(f'Gradient score: {mean_gradient:.3f}',[0,-0.2])
-    axes[1].legend(loc='upper left')
+axes[1].plot(distances,profile,label='Measured profile') # Plot distance on x axis and intensity on y
+axes[1].plot(distances,theoretical_profile,label='True profile')
+axes[1].set_title('Measured vs Actual line profile')
+axes[1].vlines((0,5*line_width),-0.2,1.1,colors='black') # Indicate where features start and end
+plt.xlabel('Distance from start of feature (microns)')
+plt.ylabel('Intensity')
+axes[1].annotate(f'Average MSE: {mean_error:.3f}',[0,-0.1])
+axes[1].annotate(f'Gradient score: {mean_gradient:.3f}',[0,-0.2])
+axes[1].legend(loc='upper left')
 
-    # Save
-    save_name = f'{feature}_{'vertical' if vertical else 'horizontal'}.png'
-    plt.savefig(os.path.join('results/library',image_name,save_name))
+# Save
+save_name = f'{feature}_{'vertical' if vertical else 'horizontal'}.png'
+plt.savefig(os.path.join('results/library',image_name,save_name))
 
-    plt.show()
-
-# # Save the data into the quality_data.npy file
-# if mode == 'data':
-#     existing_data = np.load('results/library/quality_data.npy')
-#     data = np.array([('Image', f'{image_name}'), ('Orientation', 'v' if vertical else 'h'), ('Feature', f'{feature}'), 
-#                      ('MSE', f'{round(mean_error,4)}'), ('Gradient', f'{round(mean_gradient,4)}')])
-#     new_data = np.append(existing_data,data)
-#     print(new_data)
-#     np.save('results/library/quality_data.npy',new_data)
+plt.show()
