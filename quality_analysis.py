@@ -4,8 +4,8 @@ import numpy as np
 import fpm_functions as fpm
 from skimage.measure import profile_line
 from skimage.filters import threshold_otsu
-from scipy.fft import fft, ifft
 from scipy.optimize import curve_fit
+from skimage.restoration import richardson_lucy
 import os
 
 #### This script is for checking the reconstruction quality of USAF target high resolution image ####
@@ -57,7 +57,7 @@ def pixel_slice_selection(image,group,element,snap=True):
     return profile,coords
 
 # Find the error between the user selected profile and the theoretical feature profile for a given alignment offset
-def get_error(profile,pixel_size,line_width,offset):
+def get_error(profile,pixel_size,line_width,offset,get_res=False):
     
     "profile: User selected line slice constaining intensity at each pixel index"
     "pixel_size: Size of pixel in microns in high resolution image"
@@ -103,45 +103,45 @@ def get_error(profile,pixel_size,line_width,offset):
         return
     error /= num_points # To get mean
     
-    # # Find a score for the gradient of the profile about the feature lines (at each of the six transitions)
-    # gradients = []
-    # edges = [line_width*i for i in range(6)] # Distances where transition occurs
-    # indices = [np.argmin(np.abs(distances - edge)) for edge in edges] # Indices where the edge is found
-    # for i in indices:
-    #     # 1st order central derivative of pixel intensity wrt distance
-    #     for dx in range(1,4): # Use some different widths for calculating derivative
-    #         gradients.append(abs((profile[i+dx] - profile[i-dx])/(distances[i+dx] - distances[i-dx])))
-    
-    # gradient_score = np.mean(gradients) # Return average
-    
     ## Estimate resolution
+    res = 0
+    psf = 0
+    if get_res:
+        edges = [line_width*i for i in range(6)] # Distances where transition occurs
+        indices = [np.argmin(np.abs(distances - edge)) for edge in edges] # Indices where the edge is found
+        
+        # Pick an edge and deconvolve the region around it
+        i = indices[4] # Index where an edge is (2 or 4 work)
+        # Consider a fixed distance either side of the edge
+        dist = 1.5 # Distance blurred region extends either side of an edge is about 1-2um for most images
+        # dist should be as small as possible while not cropping the psf, so that psf is flat either side of central spike
+        # If dist is too big then noise is introduced around the edge and the psf becomes far too wide
+        r = round(dist/pixel_size) # Number of pixels either side of edge for blurred region
+        cropped_profile_measured = profile[i-r:i+r]
+        cropped_profile_true = theoretical_profile[i-r:i+r]
+        
+        # Find point spread function (psf)
+        # theoretical profile * psf = measured profile, so we can deconvolve in Fourier domain
+        # psf = ifft(fft(cropped_profile_measured)/(fft(cropped_profile_true)+1e-8))
+        # psf = np.abs(psf) # Don't care about phase
+        psf = richardson_lucy(np.array(cropped_profile_measured), np.array(cropped_profile_true), num_iter=30)
+        psf = psf[int(len(psf)*0.1):int(len(psf)*0.85)] # Crop again to remove boundary artefacts
+        
+        def gaussian(x, a, x0, sigma):
+            return a * np.exp(-((x - x0) ** 2) / (2 * sigma ** 2))
+        
+        # Measure the Full Width at Half Maximum (FWHM) of the PSF
+        # Fit Gaussian to the PSF
+        x = np.arange(len(psf)) # x series data (just pixel indices)
+        y = psf # y series data             
+        mean = np.argmax(y)
+        sigma = np.sqrt(sum(y * (x - mean)**2) / sum(y))
+        popt, _ = curve_fit(gaussian, x, y, p0=[1, mean, sigma])
+        sigma = abs(popt[2])
+        res = 2.355 * sigma  # Convert Gaussian sigma to FWHM (resolution)
+        res *= pixel_size # Convert from number of pixels to physical distance (um)
     
-    # Get profiles within region 
-    cropped_profile_measured = []
-    cropped_profile_true = []
-    for i in range(len(profile)):
-        if distances[i] >= 0 and distances[i] < 5*line_width: # Within region
-            cropped_profile_measured.append(profile[i])
-            cropped_profile_true.append(theoretical_profile[i])
-    
-    # theoretical profile * psf = measured profile, so we can deconvolve in Fourier domain
-    psf = ifft(fft(cropped_profile_measured)/(fft(cropped_profile_true)+1e-8))
-    psf = np.abs(psf) # Don't care about phase
-    psf = psf - np.min(psf)
-    psf /= np.max(psf) # Nomralise
-    
-    # def gaussian(x, a, x0, sigma):
-    #     """ Gaussian function for fitting the PSF """
-    #     return a * np.exp(-((x - x0) ** 2) / (2 * sigma ** 2))
-    
-    # """ Measure the Full Width at Half Maximum (FWHM) of the PSF """
-    # # Fit Gaussian to the PSF
-    # x = np.linspace(0, len(psf), len(psf))
-    # popt, _ = curve_fit(gaussian, x, psf, p0=[1, np.argmax(psf), 1])
-    # sigma = abs(popt[2])
-    # fwhm = 2.355 * sigma  # Convert Gaussian sigma to FWHM
-    
-    return error, psf, distances, theoretical_profile
+    return error, res, psf, distances, theoretical_profile
 
 # Find the approx index of the first black line pixel in the feature
 def get_approx_offset(profile):
@@ -159,8 +159,8 @@ def get_approx_offset(profile):
             return i
 
 # Select feature to analyse, [group, element]. [7,6] is smallest, [6,1] is biggest
-feature = [6,1] 
-# feature = [7,6]
+# feature = [6,1] 
+feature = [7,6]
 
 # Image name is name of folder where magnitude.png is
 # Pixel size in reconstructed image is original pixel size (in microns) divided by upsampling ratio
@@ -168,11 +168,7 @@ feature = [6,1]
 # then uncomment the first print statement below)
 # Angle is rotation degrees acw
 
-# image_name = 'v3_usaf_47' # My best result
-# pixel_size = 0.23
-# angle = -0.7
-
-image_name = 'v3_usaf_best'
+image_name = 'v3_usaf_best' # Best result
 pixel_size = 0.23
 angle = -1
 
@@ -216,7 +212,7 @@ profile /= 255 # Range should be 0-1 (but don't normalise with image informatio
 vertical = True if coords["end"][1] == coords["start"][1] else False # Flag for vertical/horizontal line
 
 # Calculate pixel size by selecting precisely start and end of feature
-print(f'Number of pixels: {len(profile)}, five line width: {round(5*line_width,3)}um, pixel size: {round(5*line_width/len(profile),3)}um')
+# print(f'Number of pixels: {len(profile)}, five line width: {round(5*line_width,3)}um, pixel size: {round(5*line_width/len(profile),3)}um')
 
 ### Optimise offset ###
 
@@ -229,7 +225,7 @@ offsets = np.linspace(approx_offset-search_range,approx_offset+search_range,sear
 errors = np.zeros(len(offsets)) # To store errors at each adjusted offset
 
 for idx, offset in enumerate(offsets):
-    errors[idx],_,_,_ = get_error(profile,pixel_size,line_width,int(offset))
+    errors[idx],_,_,_,_ = get_error(profile,pixel_size,line_width,int(offset))
 
 optimal_offset = offsets[np.argmin(errors)]
 
@@ -238,12 +234,12 @@ optimal_offset = offsets[np.argmin(errors)]
 # ax.plot(offsets,errors)
 # ax.vlines([approx_offset,optimal_offset],0,1,['black','red'])   
 
-# Find the profile and distances using the optimal offset (used for plotting)
-error,psf,distances,theoretical_profile = get_error(profile,pixel_size,line_width,optimal_offset)
+# Get the theoretical profile and distances using the optimal offset (used for plotting)
+error,res,psf,distances,theoretical_profile = get_error(profile,pixel_size,line_width,optimal_offset,get_res=True)
 
 plt.plot(psf)
 plt.show()
-
+print(res)
 
 ### Repeat either side of the profile to average across the line section ###
 lines_per_side = 3 # Number of lines per side of central line
@@ -273,21 +269,21 @@ for i in range(1, 1+lines_per_side):
     profiles.append(profile_line(image, start_neg, end_neg)/255)
 
 profile_errors = [error]
-profile_gradients = [gradient] # Score to measure sharpness of transition
+profile_resolutions = [res]
 
 for profile in profiles:
-    error,gradient,_,_ = get_error(profile,pixel_size,line_width,optimal_offset)
+    error,res,_,_,_ = get_error(profile,pixel_size,line_width,optimal_offset,get_res=True)
     profile_errors.append(error)
-    profile_gradients.append(gradient)
+    profile_resolutions.append(res)
 
 # Mean across all segments
 mean_error = np.mean(profile_errors) 
-mean_gradient = np.mean(profile_gradients)
+mean_res = np.mean(profile_resolutions)
 
 # Plot results
 fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-
 axes[0].imshow(image,cmap='gray')
+
 # Just draw the edge and central lines
 if vertical:
     x_starts = [coords["start"][1] + lines_per_side*i*pixel_offset for i in range(-1,2)]
@@ -303,8 +299,8 @@ axes[1].set_title('Measured vs Actual line profile')
 axes[1].vlines((0,5*line_width),-0.2,1.1,colors='black') # Indicate where features start and end
 plt.xlabel('Distance from start of feature (microns)')
 plt.ylabel('Intensity')
-axes[1].annotate(f'Average MSE: {mean_error:.3f}',[0,-0.1])
-axes[1].annotate(f'Gradient score: {mean_gradient:.3f}',[0,-0.2])
+axes[1].annotate(f'Average MSE: {mean_error:.3f} (arb)',[0,-0.1])
+axes[1].annotate(f'Estimated resolution: {mean_res:.3f}um',[0,-0.2])
 axes[1].legend(loc='upper left')
 
 # Save
