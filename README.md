@@ -38,15 +38,15 @@ LEDs.
 
 Squiggly artefacts in reconstructed images are very sensitive to input k-vectors -> i.e. LED to sample distance and initial LED position
 
-Exposure time of 0.5s is good for USAF
+Exposure time of 0.5s is good for USAF, lower exposures can be used if darkfield is being washed out (too bright or noisy)
+* 0.3s good for natural samples
 
 Main aberrations are spherical (and usually some defocus)
 
-# TEST
-For natural samples: longer exposure might yield better results. Also LED correction seems to make far fewer adjustments to wavevectors
-compared to the USAF testing.
+Data gathering time for 15x15 with 0.3-0.5s exposue ~ 90-120s
+Reconstruction time for 300x300 greyscale image with 8 iterations using ePIE and no LED correction ~ 70s (for raspberry pi 5 8Gb)
+~ 3 min total
 
-Sample_1 is dried saliva
 
 #############################################
 
