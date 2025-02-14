@@ -47,6 +47,8 @@ Data gathering time for 15x15 with 0.3-0.5s exposue ~ 90-120s
 Reconstruction time for 300x300 greyscale image with 8 iterations using ePIE and no LED correction ~ 70s (for raspberry pi 5 8Gb)
 ~ 3 min total
 
+For natural samples phase image can be really useful to see 3D structure of sample (especially when attenuation is low)
+
 
 #############################################
 

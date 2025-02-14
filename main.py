@@ -30,7 +30,7 @@ reconstruction = False # Do reconstruction after gathering images
 grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
 img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
 brightfield_preview = True # Preview bright or darkfield
-preview_exposure = int(35e3) if brightfield_preview else int(500e3) # In microseconds for preview
+preview_exposure = int(40e3) if brightfield_preview else int(500e3) # In microseconds for preview
 fpm_exposure = int(300e3)  # In microseconds for FPM image capture, 300-500ms
 led_color = 'white' # Illumination color
 WLENGTH = 550e-9 # Central wavelength of LED light, m, 550nm for white, 630nm for red, 460nm for blue
@@ -105,18 +105,25 @@ led_matrix.set_rotation(135) # Ensure 0,0 is bottom left pixel and as shown on m
 
 # Initialize camera
 camera = Picamera2()
+# print(camera.camera_controls)
 still_config = camera.create_still_configuration(
-    main={'size': (1456,1088)}, controls={"AnalogueGain": 1, 'ExposureTime': preview_exposure} # Need to use whole region then crop (otherwise we lose resolution)
-)
+    # Need to use whole region then crop (otherwise we lose resolution)
+    main={'size': (1456,1088)}, controls={"AnalogueGain": 1, 'ExposureTime': preview_exposure, 'AeEnable': False})
 camera.configure(still_config)
 camera.start()
+
+# Trying to stabalize images for preview...
+camera.set_controls({ 
+    "AwbEnable": False,  
+    "NoiseReductionMode": 1, # Might be interesting to play with 
+})
 
 # Preview alignment using matplotlib
 print("Align your sample mechanically or move region with key arrows. Press ENTER when ready.")
 if brightfield_preview:
-    led_matrix.show_circle(radius=3, offset_x=1,offset_y=1, color='white', brightness=1)  # Turn on brightfield LEDs
+    led_matrix.show_circle(radius=2, color='white', brightness=1)  # Turn on brightfield LEDs
 else:
-    led_matrix.show_circle(radius=3, offset_x=1,offset_y=1, color='black', outside_color='white') # Darkfield preview
+    led_matrix.show_circle(radius=2, color='black', outside_color='white') # Darkfield preview
 quit_preview = False
 plot_closed = False
 
@@ -154,6 +161,7 @@ cropped_frame_plot = axes[1].imshow(placeholder_cropped, vmin=0, vmax=255)  # Cr
 
 # Main preview loop
 while not (quit_preview or plot_closed):
+    # print(camera.capture_metadata())
     # Capture frames
     frame = camera.capture_array()  # Entire region (useful for aligning sample)
     cropped_frame = frame[crop_start_y:crop_start_y+img_size, crop_start_x:crop_start_x+img_size]  # Cropped region
@@ -172,7 +180,8 @@ while not (quit_preview or plot_closed):
     axes[0].autoscale()
     axes[1].autoscale()
 
-    plt.pause(0.05)  # Short pause for smoother updates
+    plt.pause(0.1)  # Short pause for smoother updates
+    time.sleep(0.1) # Helps stabalize camera 
 
 # Disconnect the events to their handlers now we are done with preview
 fig.canvas.mpl_disconnect('key_press_event')
