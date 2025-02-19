@@ -285,6 +285,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
     plot_mode = options['plot_mode'] # If using .py use 0,1. For notebook use 2,3
     update_method = options['update_method'] # 1 for QN, 2 for EPRY (alpha beta need to be changed accordingly)
     LED_correction = options['LED_correction'] # Do correction for kx,ky - LED coordinates
+    momentum = options['momentum'] # Add momentum to alpha and beta after each iteration
     
     # Other parameters
     img_size = images.shape[0] # Square, same size as pupil function
@@ -388,7 +389,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
                 kx[i] = kx_new # Updated LED positions
                 ky[i] = ky_new
             
-            # Algorithm 2    
+            # Algorithm 2 (fast)
             if LED_correction == 2:
                 kx_new,ky_new = update_LED_positions_fast(obj,img,pupil,kx[i],ky[i],img_size,obj_center,i)
                 kx[i] = kx_new # Updated LED positions
@@ -397,7 +398,12 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             # Plot every image
             if plot_mode == 2:
                 plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,error) # Plotting for notebook
-        
+
+        # Momentum, tuned for ePIE
+        if momentum:
+            alpha+=0.13
+            beta+=0.13
+            
         # Status message
         progress = int((iter+1)/max_iter * 100)
         sys.stdout.write(f'\r Reconstruction Progress: {progress}%') # Write to same line

@@ -1,0 +1,19 @@
+Most reconstructions done with the following algorithm parameters:
+options = {
+    'max_iter': 8, # Number of iterations
+    'alpha': 1, # Regularisation parameter for object update, <10
+    'beta': 1, # Regularisation parameter for pupil update, >1
+    'plot_mode': 3, # 0, off; 2, plot every image; 3, plot every iteration (notebook version)
+    'LED_correction': 0, # 0, off; 1, accurate; 2, fast. Update wavevectors during reconstruction 
+    'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE
+    'momentum': False, # Use momentum on alpha and beta (tuned for ePIE only)
+}
+
+
+cardiac_muscle, lilium_anther, rectum, saliva, talia_stem, zea_root all taken with LED2SAMPLE = 50mm
+
+talia_stem_2 has LED2SAMPLE = 71mm
+
+MIGHT BE BETTER TO USE A LONGER LED2SAMPLE DISTANCE FOR NATURAL SAMPLES
+- makes the reconstruction more stable and brighter
+

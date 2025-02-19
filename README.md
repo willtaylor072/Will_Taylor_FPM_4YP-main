@@ -16,6 +16,17 @@ camera = Picamera2()
 camera.stop()
 camera.close()
 
+Typical algorithm config:
+options = {
+    'max_iter': 8, # Number of iterations
+    'alpha': 1, # Regularisation parameter for object update, <10
+    'beta': 1, # Regularisation parameter for pupil update, >1
+    'plot_mode': 3, # 0, off; 2, plot every image; 3, plot every iteration (notebook version)
+    'LED_correction': 0, # 0, off; 1, accurate; 2, fast. Update wavevectors during reconstruction 
+    'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE
+    'momentum': False, # Use momentum on alpha and beta (tuned for ePIE only)
+}
+
 KEY FINDINGS AND CONSIDERATIONS
 
 Central LED (first LED in sequence) should be close to optical axis. If it is not directly aligned with
@@ -41,7 +52,15 @@ Squiggly artefacts in reconstructed images are very sensitive to input k-vectors
 Exposure time of 0.5s is good for USAF, lower exposures can be used if darkfield is being washed out (too bright or noisy)
 * 0.3s good for natural samples
 
+Also larger LED to sample distance might be useful for natural samples, to provide more redundant data in reconstruction
+For the USAF target we used the shortest LED to sample distance to include the highest frequency spacial information and get the best resolution, but natural samples might need a larger brightfield region to reconstruct effectively
+
+Green LED light (550nm) worked well - didn't require much adjustment to exposure (just a slight increase of say 100ms)
+Objective is corrected for 550nm spherical aberrations, so may reduce noise in darkfield (not extensively tested)
+
 Main aberrations are spherical (and usually some defocus)
+
+Nominal upsampling ratio of 5 is usually good
 
 Data gathering time for 15x15 with 0.3-0.5s exposue ~ 90-120s
 Reconstruction time for 300x300 greyscale image with 8 iterations using ePIE and no LED correction ~ 70s (for raspberry pi 5 8Gb)

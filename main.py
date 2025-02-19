@@ -44,6 +44,7 @@ options = {
     'plot_mode': 1, # 0, plot only at end; 1, plot every iteration
     'LED_correction': 0, # 0, off; 1, accurate; 2, fast. Update wavevectors during reconstruction 
     'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE. Update method, ePIE reccomended
+    'momentum': False, # Use momentum on alpha and beta (tuned for ePIE only)
 }
 
 # Optical system parameters
