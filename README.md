@@ -49,6 +49,8 @@ Reconstruction time for 300x300 greyscale image with 8 iterations using ePIE and
 
 For natural samples phase image can be really useful to see 3D structure of sample (especially when attenuation is low)
 
+USEFUL GITHUB COMMANDS
+git reset --hard origin/main    # Pulls the main repo regardless of any mess in the current working tree (overriding current device)
 
 #############################################
 
