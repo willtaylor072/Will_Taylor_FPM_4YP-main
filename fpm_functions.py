@@ -269,7 +269,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
     # kx,ky; location of LEDs in Fourier domain, in order of images taken
     # obj; initial estimate for object in spacial frequency domain
     # pupil_binary; binary mask for low pass cutoff
-    # options; alpha, beta (regularisation), max_iter, plotting, LED_correction
+    # options; alpha, beta (regularisation), max_iter, plotting, LED_correction, momentum, intensity correction
     # fig, axes; for plotting
     # pupil; known initial pupil function (optional)
     
@@ -286,6 +286,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
     update_method = options['update_method'] # 1 for QN, 2 for EPRY (alpha beta need to be changed accordingly)
     LED_correction = options['LED_correction'] # Do correction for kx,ky - LED coordinates
     momentum = options['momentum'] # Add momentum to alpha and beta after each iteration
+    intensity_correction = options['intensity_correction'] # Correct for LED intensity variations
     
     # Other parameters
     img_size = images.shape[0] # Square, same size as pupil function
@@ -311,10 +312,15 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             # Measured image amplitude
             img = np.sqrt(images[:,:,i])
             
-            # Exit wave throgh sample
+            # Exit wave throgh sample (estimated image)
             exit_wave = object_cropped * pupil
             
-            # Update wave formed with magnitude of measured image and phase of exit_wave
+            # Intensity correction
+            if iter >= 1 and intensity_correction: 
+                correction_factor = np.sum(np.abs(IFT(exit_wave)))/np.sum(img)
+                img *= np.sqrt(correction_factor)
+
+            # Update wave formed with magnitude of measured image and phase of exit wave
             update_wave = FT(img*IFT(exit_wave)/np.abs(IFT(exit_wave)))
             
             # PIE update
@@ -391,6 +397,12 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             
             # Algorithm 2 (fast)
             if LED_correction == 2:
+                kx_new,ky_new = update_LED_positions_fast(obj,img,pupil,kx[i],ky[i],img_size,obj_center,i)
+                kx[i] = kx_new # Updated LED positions
+                ky[i] = ky_new
+                
+            # Only on first iteration
+            if LED_correction == 3 and iter == 0:
                 kx_new,ky_new = update_LED_positions_fast(obj,img,pupil,kx[i],ky[i],img_size,obj_center,i)
                 kx[i] = kx_new # Updated LED positions
                 ky[i] = ky_new

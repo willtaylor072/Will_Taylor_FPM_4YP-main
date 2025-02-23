@@ -45,6 +45,7 @@ options = {
     'LED_correction': 0, # 0, off; 1, accurate; 2, fast. Update wavevectors during reconstruction 
     'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE. Update method, ePIE reccomended
     'momentum': False, # Use momentum on alpha and beta (tuned for ePIE only)
+    'intensity_correction': True, # Adjust image intensity to account for LED variation
 }
 
 # Optical system parameters

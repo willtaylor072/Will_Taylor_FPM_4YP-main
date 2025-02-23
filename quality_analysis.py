@@ -192,10 +192,10 @@ angle = -1
 # pixel_size = 0.286
 # angle = 0
 
-# # Select other image to measure pixel size
-# image_pil = Image.open('data/library/usaf_v3_58/image_0.png')
+# # Select other image to measure pixel size (comment out first line of next section)
+# image_pil = Image.open('data/library/talia_stem/image_0.png')
 # angle = -0.5
-# pixel_size = 1.14
+# pixel_size = 1.15
 
 image_pil = Image.open(os.path.join('results/library',image_name,'magnitude.png'))
 image_pil_rotated = image_pil.rotate(angle,resample=Image.BICUBIC,expand=False)

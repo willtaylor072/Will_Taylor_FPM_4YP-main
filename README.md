@@ -18,13 +18,14 @@ camera.close()
 
 Typical algorithm config:
 options = {
-    'max_iter': 8, # Number of iterations
+    'max_iter': 5, # Number of iterations
     'alpha': 1, # Regularisation parameter for object update, <10
     'beta': 1, # Regularisation parameter for pupil update, >1
-    'plot_mode': 3, # 0, off; 2, plot every image; 3, plot every iteration (notebook version)
-    'LED_correction': 0, # 0, off; 1, accurate; 2, fast. Update wavevectors during reconstruction 
+    'plot_mode': 1 for .py, 3 for .ipynb
+    'LED_correction': 0, # 0, off; 1, accurate; 2, fast; 3, first iteration only
     'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE
     'momentum': False, # Use momentum on alpha and beta (tuned for ePIE only)
+    'intensity_correction': False, # Adjust image intensity to account for LED variation
 }
 
 KEY FINDINGS AND CONSIDERATIONS
