@@ -66,7 +66,6 @@ def LED_spiral(n, x_offset=0, y_offset=0):
 
 # Find a suitable size of the object
 def calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, sampling_size):
-    
     r = np.sqrt(2*(grid_size*LED_P*0.5)**2) # Max radius of LED from center
     led_na = r/(np.sqrt(r**2+LED2SAMPLE**2)) # Max NA of LED
     max_freq = led_na/WLENGTH + NA/WLENGTH # Maximum spacial frequency in x
@@ -75,7 +74,6 @@ def calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENG
 
 # Find the scaled (dimensionless) LED wavevectors (for placing each low res image in Fourier domain)
 def calculate_wavevectors(x, y, LED2SAMPLE, WLENGTH, sampling_size):
-    
     kx = np.zeros(len(x)) # x components of wavevector for each LED illumination
     ky = np.zeros(len(x)) # y components
     for i in range(len(x)):

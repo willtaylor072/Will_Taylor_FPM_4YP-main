@@ -19,14 +19,18 @@ camera.close()
 Typical algorithm config:
 options = {
     'max_iter': 5, # Number of iterations
-    'alpha': 1, # Regularisation parameter for object update, <10
-    'beta': 1, # Regularisation parameter for pupil update, >1
+    'alpha': 1, # Regularisation parameter for object update
+    'beta': 1, # Regularisation parameter for pupil update
     'plot_mode': 1 for .py, 3 for .ipynb
     'LED_correction': 0, # 0, off; 1, accurate; 2, fast; 3, first iteration only
     'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE
     'momentum': False, # Use momentum on alpha and beta (tuned for ePIE only)
     'intensity_correction': False, # Adjust image intensity to account for LED variation
 }
+
+PIE is slowest, typically I use ePIE. If stability is required (e.g. poor data) use rPIE.
+alpha = beta = 1 seems to usually work.
+
 
 KEY FINDINGS AND CONSIDERATIONS
 
@@ -120,8 +124,8 @@ LED_P = 3.3 # LED pitch, mm
 NA = 0.1 # Objective numerical aperture
 PIX_SIZE = 1025e-9 # Pixel size on object plane, m
 WLENGTH = 550e-9 # Central wavelength of LED light, m
-x_offset = 0 # x distance from central LED to optical axis, mm (+ve if central LED is to right of optical axis)
-y_offset = 0 # y distance from central LED to optical axis, mm (+ve if central LED is below optical axis)
+x_initial = 0 # x distance from central LED to optical axis, mm (+ve if central LED is to right of optical axis)
+y_initial = 0 # y distance from central LED to optical axis, mm (+ve if central LED is below optical axis)
 
 System parameters for V1 microscope:
 LED2SAMPLE = 54 # Distance from LED array to the sample, mm (larger distance leads to closer overlapping Fourier circles)
