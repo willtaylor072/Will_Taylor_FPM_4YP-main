@@ -111,12 +111,12 @@ result: v3_usaf_best
 Optical parameters:
 
 System parameters for V3 microscope:
-LED2SAMPLE: measure directly or see name (closest distance is 50mm (not 47 as the name suggests))
+LED2SAMPLE: measure directly or see name (closest distance is about 50mm)
 x_offset = 1
 y_offset = 0 # This is the correct alignment for the sequence - (8,7) is central LED
 x_initial = 0.9
 y_initial = -0.5 # These can be finely tuned in sensitivity_testing.ipynb
-PIX_SIZE = 1150e-9 (measured for usaf_v3_47)
+PIX_SIZE = 1150e-9 (measured for usaf_v3_47), 863e-9 for 4x magnification 
 
 System parameters for V2 microscope:
 LED2SAMPLE = 80 # Distance from LED array to the sample, mm (larger distance leads to closer overlapping Fourier circles)
