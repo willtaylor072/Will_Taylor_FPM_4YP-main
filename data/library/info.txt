@@ -15,6 +15,8 @@ cardiac_muscle, lilium_anther, rectum, saliva, talia_stem, zea_root all taken wi
 talia_stem_2 has LED2SAMPLE = 71mm
 pixel size = 3450/3 = 1150um
 
+#####
+Adjustment to V3 microscope
 
 talia_65_new and talia_50_new are taken with V3 microscope with 4x magnification,
 with the reference geometry for the objective (20mm working distance and 160mm tube length)
@@ -28,3 +30,11 @@ usaf_v3_NEW
 
 usaf_v3_NEW_2
 800ms exposure
+
+diamond samples:
+600ms green, 4x magnification, 50mm LED2SAMPLE
+
+diamond_1 is the ~600nm slanted lines - no darkfield info... cannot reconstruct
+diamond_2 is the ~2um center to center lines
+diamond_3 is the ~1um center to center lines
+diamond_4 is dots of decreasing separation
