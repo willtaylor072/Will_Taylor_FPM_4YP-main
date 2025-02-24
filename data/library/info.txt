@@ -7,13 +7,24 @@ options = {
     'LED_correction': 0, # 0, off; 1, accurate; 2, fast. Update wavevectors during reconstruction 
     'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE
     'momentum': False, # Use momentum on alpha and beta (tuned for ePIE only)
+    'intensity_correction': True, 
 }
 
 
 cardiac_muscle, lilium_anther, rectum, saliva, talia_stem, zea_root all taken with LED2SAMPLE = 50mm
-
 talia_stem_2 has LED2SAMPLE = 71mm
+pixel size = 3450/3 = 1150um
 
-MIGHT BE BETTER TO USE A LONGER LED2SAMPLE DISTANCE FOR NATURAL SAMPLES
-- makes the reconstruction more stable and brighter
 
+talia_65_new and talia_50_new are taken with V3 microscope with 4x magnification,
+with the reference geometry for the objective (20mm working distance and 160mm tube length)
+so the pixel size is 3450/4=863um
+exposure 500ms and green light
+
+With 4x magnification system increase exposure slightly 
+
+usaf_v3_NEW
+600ms green, 4x magnification, 50mm LED2SAMPLE
+
+usaf_v3_NEW_2
+800ms exposure

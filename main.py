@@ -31,7 +31,7 @@ grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only 
 img_size = 300 # 100-300 is sensible for square images (any bigger and reconstruction will be slow)
 brightfield_preview = True # Preview bright or darkfield
 preview_exposure = int(40e3) if brightfield_preview else int(500e3) # In microseconds for preview
-fpm_exposure = int(500e3)  # In microseconds for FPM image capture, 300-500ms
+fpm_exposure = int(800e3)  # In microseconds for FPM image capture, 300-600ms
 led_color = 'green' # Illumination color
 WLENGTH = 550e-9 # Central wavelength of LED light, m, 550nm for white, 630nm for red, 460nm for blue
 x_coords,y_coords = fpm.LED_spiral(grid_size,x_offset=1,y_offset=0) # LED sequence (ensure first LED is aligned with optical axis)
