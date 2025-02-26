@@ -160,7 +160,8 @@ def get_approx_offset(profile):
 
 # Select feature to analyse, [group, element]. [7,6] is smallest, [6,1] is biggest
 # feature = [6,1] 
-feature = [7,6]
+# feature = [7,6]
+feature = [6,1]
 
 # Image name is name of folder where magnitude.png is
 # Pixel size in reconstructed image is original pixel size (in microns) divided by upsampling ratio
@@ -168,9 +169,9 @@ feature = [7,6]
 # then uncomment the first print statement below)
 # Angle is rotation degrees acw
 
-image_name = 'v3_usaf_best' # Best result
-pixel_size = 0.23
-angle = -1
+# image_name = 'v3_usaf_best' # Best result
+# pixel_size = 0.23
+# angle = -1
 
 # image_name = 'v2_usaf_taped'
 # pixel_size = 0.205 
@@ -192,12 +193,12 @@ angle = -1
 # pixel_size = 0.286
 # angle = 0
 
-# # Select other image to measure pixel size (comment out first line of next section)
-# image_pil = Image.open('data/library/talia_stem/image_0.png')
-# angle = -0.5
-# pixel_size = 1.15
+# Select other image to measure pixel size (comment out first line of next section)
+image_pil = Image.open('data/library/usaf_v3_NEW/image_0.png')
+angle = -0.5
+pixel_size = 1.15
 
-image_pil = Image.open(os.path.join('results/library',image_name,'magnitude.png'))
+# image_pil = Image.open(os.path.join('results/library',image_name,'magnitude.png'))
 image_pil_rotated = image_pil.rotate(angle,resample=Image.BICUBIC,expand=False)
 image = np.array(image_pil_rotated) # Convert to numpy array
 
@@ -212,7 +213,7 @@ profile /= 255 # Range should be 0-1 (but don't normalise with image informatio
 vertical = True if coords["end"][1] == coords["start"][1] else False # Flag for vertical/horizontal line
 
 # Calculate pixel size by selecting precisely start and end of feature
-# print(f'Number of pixels: {len(profile)}, five line width: {round(5*line_width,3)}um, pixel size: {round(5*line_width/len(profile),3)}um')
+print(f'Number of pixels: {len(profile)}, five line width: {round(5*line_width,3)}um, pixel size: {round(5*line_width/len(profile),3)}um')
 
 ### Optimise offset ###
 
@@ -237,9 +238,9 @@ optimal_offset = offsets[np.argmin(errors)]
 # Get the theoretical profile and distances using the optimal offset (used for plotting)
 error,res,psf,distances,theoretical_profile = get_error(profile,pixel_size,line_width,optimal_offset,get_res=True)
 
-plt.plot(psf)
-plt.show()
-print(res)
+# plt.plot(psf)
+# plt.show()
+# print(res)
 
 ### Repeat either side of the profile to average across the line section ###
 lines_per_side = 3 # Number of lines per side of central line

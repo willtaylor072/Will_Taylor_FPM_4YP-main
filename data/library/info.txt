@@ -20,7 +20,7 @@ Adjustment to V3 microscope
 
 talia_65_new and talia_50_new are taken with V3 microscope with 4x magnification,
 with the reference geometry for the objective (20mm working distance and 160mm tube length)
-so the pixel size is 3450/4=863um
+the pixel size is 700-725um 
 exposure 500ms and green light
 
 With 4x magnification system increase exposure slightly 
