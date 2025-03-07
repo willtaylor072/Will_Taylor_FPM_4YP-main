@@ -6,6 +6,7 @@ from skimage.measure import profile_line
 from skimage.filters import threshold_otsu
 from scipy.optimize import curve_fit
 from skimage.restoration import richardson_lucy
+from scipy.fft import fft,ifft
 import os
 
 #### This script is for checking the reconstruction quality of USAF target high resolution image ####
@@ -86,9 +87,9 @@ def get_error(profile,pixel_size,line_width,offset,get_res=False):
             elif distance < 5*line_width: # Third black line
                 val = 0
             else: # After the region
-                val = None 
+                val = 0 
         else: # Before the region
-            val = None 
+            val = 0 
             
         theoretical_profile[i] = val
     
@@ -109,34 +110,40 @@ def get_error(profile,pixel_size,line_width,offset,get_res=False):
     if get_res:
         edges = [line_width*i for i in range(6)] # Distances where transition occurs
         indices = [np.argmin(np.abs(distances - edge)) for edge in edges] # Indices where the edge is found
-        
-        # Pick an edge and deconvolve the region around it
-        i = indices[4] # Index where an edge is (2 or 4 work)
-        # Consider a fixed distance either side of the edge
-        dist = 1.5 # Distance blurred region extends either side of an edge is about 1-2um for most images
-        # dist should be as small as possible while not cropping the psf, so that psf is flat either side of central spike
-        # If dist is too big then noise is introduced around the edge and the psf becomes far too wide
-        r = round(dist/pixel_size) # Number of pixels either side of edge for blurred region
+
+        # Specify region to do deconvolution
+        i = indices[1] # Line edge
+        dist = 2.5 # Distance either side of edge for deconvolution, 2.5um works
+        r = round(dist/pixel_size) # Offset either direction
         cropped_profile_measured = profile[i-r:i+r]
         cropped_profile_true = theoretical_profile[i-r:i+r]
         
         # Find point spread function (psf)
+        
+        # Explicit deconvolution
         # theoretical profile * psf = measured profile, so we can deconvolve in Fourier domain
         # psf = ifft(fft(cropped_profile_measured)/(fft(cropped_profile_true)+1e-8))
         # psf = np.abs(psf) # Don't care about phase
-        psf = richardson_lucy(np.array(cropped_profile_measured), np.array(cropped_profile_true), num_iter=30)
-        psf = psf[int(len(psf)*0.1):int(len(psf)*0.85)] # Crop again to remove boundary artefacts
+        # psf/= np.max(psf)
         
+        # Iterative method
+        # Very important in this algorithm to use correct iteration number (too many will overfit noise and artificially
+        # narrow the psf), 25 iterations works
+        psf = richardson_lucy(np.array(cropped_profile_measured), np.array(cropped_profile_true), num_iter=25)
+        
+        # Crop psf
+        psf = psf[int(len(psf)*0.3):int(len(psf)*0.9)] # Crop again to remove boundary artefacts
+                
         def gaussian(x, a, x0, sigma):
             return a * np.exp(-((x - x0) ** 2) / (2 * sigma ** 2))
         
         # Measure the Full Width at Half Maximum (FWHM) of the PSF
         # Fit Gaussian to the PSF
-        x = np.arange(len(psf)) # x series data (just pixel indices)
-        y = psf # y series data             
+        x = np.arange(len(psf),dtype=np.float64) # x series data (just pixel indices)
+        y = np.array(psf,dtype=np.float64) # y series data             
         mean = np.argmax(y)
         sigma = np.sqrt(sum(y * (x - mean)**2) / sum(y))
-        popt, _ = curve_fit(gaussian, x, y, p0=[1, mean, sigma])
+        popt, _ = curve_fit(gaussian, x, y, p0=[1, mean, sigma],)
         sigma = abs(popt[2])
         res = 2.355 * sigma  # Convert Gaussian sigma to FWHM (resolution)
         res *= pixel_size # Convert from number of pixels to physical distance (um)
@@ -161,7 +168,7 @@ def get_approx_offset(profile):
 # Select feature to analyse, [group, element]. [7,6] is smallest, [6,1] is biggest
 # feature = [6,1] 
 # feature = [7,6]
-feature = [6,1]
+# feature = [6,3]
 
 # Image name is name of folder where magnitude.png is
 # Pixel size in reconstructed image is original pixel size (in microns) divided by upsampling ratio
@@ -169,36 +176,38 @@ feature = [6,1]
 # then uncomment the first print statement below)
 # Angle is rotation degrees acw
 
-# image_name = 'v3_usaf_best' # Best result
+# Resolution for 10,12,14 iterations, recommended 15 for single edge
+
+image_name = 'v3_usaf_47' # 0.377, 0.33, 0.294
+pixel_size = 0.23
+angle = -1
+
+# image_name = 'v3_usaf_58'
 # pixel_size = 0.23
 # angle = -1
 
-# image_name = 'v2_usaf_taped'
+# image_name = 'v2_usaf_taped' # 0.635, 0.50, 0.428
 # pixel_size = 0.205 
 # angle = 2.6
 
-# image_name = 'v2_usaf'
-# pixel_size = 0.271 
-# angle = 1.2
-
-# image_name = 'v1_usaf'
+# image_name = 'v1_usaf' # 0.670, 0.605, 0.472
 # pixel_size = 0.19
 # angle = -1.2 
 
-# image_name = 'v1_usaf_optimal'
+# image_name = 'v1_usaf_optimal' # 0.488, 0.423, 0.431
 # pixel_size = 0.226
 # angle = -1.2
 
-# image_name = 'usaf_matlab'
+# image_name = 'usaf_matlab' # 0.436, 0.384, 0.369
 # pixel_size = 0.286
 # angle = 0
 
 # Select other image to measure pixel size (comment out first line of next section)
-image_pil = Image.open('data/library/usaf_v3_NEW/image_0.png')
-angle = -0.5
-pixel_size = 1.15
+# image_pil = Image.open('data/library/usaf_v3_NEW/image_0.png')
+# angle = -0.5
+# pixel_size = 1.15
 
-# image_pil = Image.open(os.path.join('results/library',image_name,'magnitude.png'))
+image_pil = Image.open(os.path.join('results/library',image_name,'magnitude.png'))
 image_pil_rotated = image_pil.rotate(angle,resample=Image.BICUBIC,expand=False)
 image = np.array(image_pil_rotated) # Convert to numpy array
 
@@ -238,9 +247,12 @@ optimal_offset = offsets[np.argmin(errors)]
 # Get the theoretical profile and distances using the optimal offset (used for plotting)
 error,res,psf,distances,theoretical_profile = get_error(profile,pixel_size,line_width,optimal_offset,get_res=True)
 
-# plt.plot(psf)
-# plt.show()
-# print(res)
+plt.plot(np.arange(len(psf)) * pixel_size, psf)
+plt.xlabel('Length (microns)')
+plt.ylabel('Intensity')
+plt.title('Estimated point spread function')
+plt.show()
+print(res)
 
 ### Repeat either side of the profile to average across the line section ###
 lines_per_side = 3 # Number of lines per side of central line

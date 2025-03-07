@@ -80,7 +80,7 @@ git reset --hard origin/main    # Pulls the main repo regardless of any mess in 
 
 BEST RESULTS OBTAINED
 setup: 
-v3 microscope with shortest LED to sample distance
+v3 microscope with shortest LED to sample distance (3x magnification)
 aperture under slide: 3mm (widening to 3.5mm reduced quality)
 15x15 grid, white LED light
 exposure = 0.5s
@@ -101,10 +101,11 @@ y_initial = -0.5
 algorithm:
 ePIE
 alpha = beta = 1
-LED correction off
+wavevector correction off
+intensity correction on
 iterations = 8 (it was repeated with 15 but made no visible improvement)
 
-result: v3_usaf_best
+result: v3_usaf_47
 
 #############################################
 
