@@ -10,6 +10,9 @@ options = {
     'intensity_correction': True, 
 }
 
+Full frame datasets are 60MB
+300x300 datasets are 3MB
+
 
 cardiac_muscle, lilium_anther, rectum, saliva, talia_stem, zea_root all taken with LED2SAMPLE = 50mm
 talia_stem_2 has LED2SAMPLE = 71mm
