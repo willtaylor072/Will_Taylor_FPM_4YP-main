@@ -14,14 +14,14 @@ import gpiod
 import fpm_functions as fpm 
 importlib.reload(fpm) # Reload
 
-# Data gathering script for FPM. Gather entire camera FOV, so we can reconstruct full frame later.
+# Data gathering script for FPM. Gather entire camera FOV, so we can reconstruct full frame later. 
+# For a cropped dataset use main.py
 
 ##########################################################################################################
 # Key setup variables
 
 data_folder = 'data/recent' # For saving data images
-full_frame = True # Use entire camera FOV (if false crop to size)
-crop_size = 300 # Preview / crop size, 200-300
+crop_size = 300 # For preview
 
 grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
 num_images = grid_size**2
@@ -29,7 +29,6 @@ brightfield_preview = True # Preview bright or darkfield
 preview_exposure = int(60e3) if brightfield_preview else int(500e3) # In microseconds for preview
 fpm_exposure = int(500e3)  # In microseconds for FPM image capture, 300-600ms
 led_color = 'white' # Illumination color
-WLENGTH = 550e-9 # Central wavelength of LED light, m, 550nm for white, 630nm for red, 460nm for blue
 x_coords,y_coords = fpm.LED_spiral(grid_size,x_offset=1,y_offset=0) # LED sequence (ensure first LED is aligned with optical axis)
 
 crop_start_x = int(1456/2 - crop_size/2) # For preview
@@ -91,9 +90,9 @@ camera.start()
 # Preview alignment using matplotlib
 print("Align your sample mechanically or move region with key arrows. Press ENTER when ready.")
 if brightfield_preview:
-    led_matrix.show_circle(radius=2, color='white', brightness=1)  # Turn on brightfield LEDs
+    led_matrix.show_circle(radius=2, color=led_color, brightness=1)  # Turn on brightfield LEDs
 else:
-    led_matrix.show_circle(radius=2, color='black', outside_color='white') # Darkfield preview
+    led_matrix.show_circle(radius=2, color='black', outside_color=led_color) # Darkfield preview
 quit_preview = False
 plot_closed = False
 
@@ -161,10 +160,7 @@ fig.canvas.mpl_disconnect('close_event')
 # Start taking images now that sample is aligned
 
 # Take a brightfield image (or darkfield if chosen)
-if full_frame:
-    brightfield = camera.capture_array()
-else:
-    brightfield = camera.capture_array()[crop_start_y:crop_start_y+crop_size,crop_start_x:crop_start_x+crop_size]
+brightfield = camera.capture_array()
 brightfield_pil = Image.fromarray(brightfield).convert('L') # Grayscale pillow image
 brightfield_pil.save(os.path.join(data_folder,'brightfield.png'), format='PNG') # Save as png
 brightfield = np.array(brightfield_pil) # Keep as array
@@ -190,20 +186,14 @@ plt.draw()
 plt.pause(0.1)  
 
 # Take FPM images
-if full_frame:
-    images = np.zeros((1088, 1456, num_images), dtype=np.uint8)
-else:
-    images = np.zeros((crop_size,crop_size,num_images), dtype=np.uint8) 
+images = np.zeros((1088, 1456, num_images), dtype=np.uint8)
 camera.set_controls({"ExposureTime": fpm_exposure})
 
 for i in range(num_images):
     led_matrix.show_pixel(x_coords[i], y_coords[i], brightness=1, color=led_color)
     if i == 0:
         time.sleep(0.5)  # Only need on first iteration 
-    if full_frame:
-        image = camera.capture_array()
-    else:
-        image = camera.capture_array()[crop_start_y:crop_start_y+crop_size,crop_start_x:crop_start_x+crop_size]
+    image = camera.capture_array()
     image_pil = Image.fromarray(image).convert('L') # Grayscale pillow image
     img_path = os.path.join(data_folder, f'image_{i}.png') # Create path name
     image_pil.save(img_path, format='PNG') # Save as png 

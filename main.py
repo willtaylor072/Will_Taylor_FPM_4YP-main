@@ -15,7 +15,7 @@ import fpm_functions as fpm
 importlib.reload(fpm) # Reload
 
 # This script will always do image gathering, and then can optionally do reconstruction as well
-# If reconstruction is poor, or you would like to change parameters, use reconstruction.ipynb after gathering images
+# For full frame use gather_data_NEW.py then reconstruct_NEW.py - recommended
 
 ##########################################################################################################
 # Key setup variables
