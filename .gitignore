@@ -1,0 +1,11 @@
+# Ignore build files
+/build
+/bin
+
+# Ignore IDE files
+.vscode/
+.idea/
+
+# Ignore logs and temporary files
+*.log
+*.tmp
