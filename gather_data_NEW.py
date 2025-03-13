@@ -119,7 +119,6 @@ def abort_callback(event):
 def continue_callback(event):
     global continue_script
     continue_script = True
-    button_abort.ax.set_visible(False)
     button_continue.ax.set_visible(False)
 
 # Connect the events to their handlers
@@ -207,6 +206,9 @@ elif continue_script:
     camera.set_controls({"ExposureTime": fpm_exposure})
 
     for i in range(num_images):
+        if abort_script:
+            print('Script aborted...')
+            break
         led_matrix.show_pixel(x_coords[i], y_coords[i], brightness=1, color=led_color)
         if i == 0:
             time.sleep(0.5)  # Only need on first iteration 
@@ -238,8 +240,9 @@ elif continue_script:
         sys.stdout.write(f'\r Image Gathering Progress: {progress}%') # Write to same line
         sys.stdout.flush()
 
-    print('\n Image Gathering Done!')
-    plt.imsave('data/data_grids/recent.png',data_grid,cmap='gray')
+    if not abort_script:
+        print('\n Image Gathering Done!')
+        plt.imsave('data/data_grids/recent.png',data_grid,cmap='gray')
 
 # Turn off LED matrix and camera             
 led_matrix.off()
