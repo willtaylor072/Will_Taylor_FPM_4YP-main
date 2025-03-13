@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from matplotlib.widgets import Button
 import os
 from PIL import Image
 import sys
@@ -15,7 +16,7 @@ import fpm_functions as fpm
 importlib.reload(fpm) # Reload
 
 # Data gathering script for FPM. Gather entire camera FOV, so we can reconstruct full frame later. 
-# For a cropped dataset use main.py
+# For a cropped dataset use main.py. 
 
 ##########################################################################################################
 # Key setup variables
@@ -88,20 +89,17 @@ camera.configure(still_config)
 camera.start()
 
 # Preview alignment using matplotlib
-print("Align your sample mechanically or move region with key arrows. Press ENTER when ready.")
 if brightfield_preview:
     led_matrix.show_circle(radius=2, color=led_color, brightness=1)  # Turn on brightfield LEDs
 else:
     led_matrix.show_circle(radius=2, color='black', outside_color=led_color) # Darkfield preview
-quit_preview = False
-plot_closed = False
+abort_script = False
+continue_script = False
 
-# Handles quit by 'enter' and arrow key crop adjustments
+# Handles arrow key crop adjustments
 def on_key(event):
     global quit_preview, crop_start_x, crop_start_y
     match event.key:
-        case 'enter': 
-            quit_preview = True
         case 'up': 
             crop_start_y -= 5
         case 'down': 
@@ -111,14 +109,21 @@ def on_key(event):
         case 'right':
             crop_start_x += 5
     
-# Handles closing figure (by clicking the x)
-def on_close(event):
-    global plot_closed
-    plot_closed = True  # Set flag when the plot window is closed
+# Function to abort script
+def abort_callback(event):
+    global abort_script
+    abort_script = True
+    plt.close(fig) 
+    
+# Function to continue (take data)
+def continue_callback(event):
+    global continue_script
+    continue_script = True
+    button_abort.ax.set_visible(False)
+    button_continue.ax.set_visible(False)
 
 # Connect the events to their handlers
 fig.canvas.mpl_connect('key_press_event', on_key)
-fig.canvas.mpl_connect('close_event', on_close)
 
 # Placeholder arrays for initialization (makes plotting faster)
 placeholder_frame = np.zeros((1088, 1456), dtype=np.uint8)  # Full frame size
@@ -128,8 +133,17 @@ placeholder_cropped = np.zeros((crop_size, crop_size), dtype=np.uint8)  # Croppe
 full_frame_plot = axes[0].imshow(placeholder_frame, vmin=0, vmax=255)  # Full frame plot
 cropped_frame_plot = axes[1].imshow(placeholder_cropped, vmin=0, vmax=255)  # Cropped frame plot
 
+# Add buttons below the figure
+button_ax_continue = fig.add_axes([0.55, 0.02, 0.15, 0.05]) # [left, bottom, width, height]
+button_continue = Button(button_ax_continue, 'Continue')
+button_continue.on_clicked(continue_callback)
+
+button_ax_abort = fig.add_axes([0.3, 0.02, 0.15, 0.05]) 
+button_abort = Button(button_ax_abort, 'Abort')
+button_abort.on_clicked(abort_callback)
+
 # Main preview loop
-while not (quit_preview or plot_closed):
+while not (abort_script or continue_script):
     # print(camera.capture_metadata())
     # Capture frames
     frame = camera.capture_array()  # Entire region
@@ -154,75 +168,78 @@ while not (quit_preview or plot_closed):
 
 # Disconnect the events to their handlers now we are done with preview
 fig.canvas.mpl_disconnect('key_press_event')
-fig.canvas.mpl_disconnect('close_event')
 
-#########################################################################################################
-# Start taking images now that sample is aligned
-
-# Take a brightfield image (or darkfield if chosen)
-brightfield = camera.capture_array()
-brightfield_pil = Image.fromarray(brightfield).convert('L') # Grayscale pillow image
-brightfield_pil.save(os.path.join(data_folder,'brightfield.png'), format='PNG') # Save as png
-brightfield = np.array(brightfield_pil) # Keep as array
-
-# Define the data grid (single large grayscale image for visualization)
-downsampled_size = crop_size // 15  # Each image should be this small
-data_grid = np.zeros((15 * downsampled_size, 15 * downsampled_size), dtype=np.uint8)
-
-# Update main figure to indicate FPM process has begun
-# Axis 0 will be now be brightfield image, axis 1 will be data grid which will fill in as we take images
-axes[0].cla()
-axes[1].cla()
-axes[0].set_aspect('equal') 
-axes[1].set_aspect('equal')
-axes[0].set_title("Brightfield")
-axes[1].set_title("Data Grid")
-
-axes[0].imshow(brightfield,cmap='gray')
-data_grid_display = axes[1].imshow(data_grid, cmap='gray', vmin=0, vmax=255)
-
-# Refresh
-plt.draw()   
-plt.pause(0.1)  
-
-# Take FPM images
-images = np.zeros((1088, 1456, num_images), dtype=np.uint8)
-camera.set_controls({"ExposureTime": fpm_exposure})
-
-for i in range(num_images):
-    led_matrix.show_pixel(x_coords[i], y_coords[i], brightness=1, color=led_color)
-    if i == 0:
-        time.sleep(0.5)  # Only need on first iteration 
-    image = camera.capture_array()
-    image_pil = Image.fromarray(image).convert('L') # Grayscale pillow image
-    img_path = os.path.join(data_folder, f'image_{i}.png') # Create path name
-    image_pil.save(img_path, format='PNG') # Save as png 
+if abort_script:
+    print('Script aborted...')
+elif continue_script:
     
-    image = np.array(image_pil) # Convert to array for reconstruction
-    images[:,:,i] = image # Insert into images array
-    
-    # Downsample image for the data grid
-    downsampled = np.array(image_pil.resize((downsampled_size, downsampled_size)))
+    #########################################################################################################
+    # Start taking images now that sample is aligned
 
-    # Determine position in the 15x15 grid
-    row = y_coords[i] * downsampled_size  # Ensure correct indexing
-    col = (x_coords[i]-1) * downsampled_size
+    # Take a brightfield image (or darkfield if chosen)
+    brightfield = camera.capture_array()
+    brightfield_pil = Image.fromarray(brightfield).convert('L') # Grayscale pillow image
+    brightfield_pil.save(os.path.join(data_folder,'brightfield.png'), format='PNG') # Save as png
+    brightfield = np.array(brightfield_pil) # Keep as array
 
-    # Insert into the data grid
-    if 0 <= row < data_grid.shape[0] and 0 <= col < data_grid.shape[1]:
-        data_grid[row:row + downsampled_size, col:col + downsampled_size] = downsampled
+    # Define the data grid (single large grayscale image for visualization)
+    downsampled_size = crop_size // 15  # Each image should be this small
+    data_grid = np.zeros((15 * downsampled_size, 15 * downsampled_size), dtype=np.uint8)
 
-    # Update UI using set_data
-    data_grid_display.set_data(data_grid)  
-    plt.pause(0.01) 
+    # Update main figure to indicate FPM process has begun
+    # Axis 0 will be now be brightfield image, axis 1 will be data grid which will fill in as we take images
+    axes[0].cla()
+    axes[1].cla()
+    axes[0].set_aspect('equal') 
+    axes[1].set_aspect('equal')
+    axes[0].set_title("Brightfield")
+    axes[1].set_title("Data Grid")
 
-    # Status message
-    progress = int((i+1)/num_images * 100)
-    sys.stdout.write(f'\r Image Gathering Progress: {progress}%') # Write to same line
-    sys.stdout.flush()
+    axes[0].imshow(brightfield,cmap='gray')
+    data_grid_display = axes[1].imshow(data_grid, cmap='gray', vmin=0, vmax=255)
 
-print('\n Image Gathering Done!')
-plt.imsave('data/data_grids/recent.png',data_grid,cmap='gray')
+    # Refresh
+    plt.draw()   
+    plt.pause(0.1)  
+
+    # Take FPM images
+    images = np.zeros((1088, 1456, num_images), dtype=np.uint8)
+    camera.set_controls({"ExposureTime": fpm_exposure})
+
+    for i in range(num_images):
+        led_matrix.show_pixel(x_coords[i], y_coords[i], brightness=1, color=led_color)
+        if i == 0:
+            time.sleep(0.5)  # Only need on first iteration 
+        image = camera.capture_array()
+        image_pil = Image.fromarray(image).convert('L') # Grayscale pillow image
+        img_path = os.path.join(data_folder, f'image_{i}.png') # Create path name
+        image_pil.save(img_path, format='PNG') # Save as png 
+        
+        image = np.array(image_pil) # Convert to array for reconstruction
+        images[:,:,i] = image # Insert into images array
+        
+        # Downsample image for the data grid
+        downsampled = np.array(image_pil.resize((downsampled_size, downsampled_size)))
+
+        # Determine position in the 15x15 grid
+        row = y_coords[i] * downsampled_size  # Ensure correct indexing
+        col = (x_coords[i]-1) * downsampled_size
+
+        # Insert into the data grid
+        if 0 <= row < data_grid.shape[0] and 0 <= col < data_grid.shape[1]:
+            data_grid[row:row + downsampled_size, col:col + downsampled_size] = downsampled
+
+        # Update UI using set_data
+        data_grid_display.set_data(data_grid)  
+        plt.pause(0.01) 
+
+        # Status message
+        progress = int((i+1)/num_images * 100)
+        sys.stdout.write(f'\r Image Gathering Progress: {progress}%') # Write to same line
+        sys.stdout.flush()
+
+    print('\n Image Gathering Done!')
+    plt.imsave('data/data_grids/recent.png',data_grid,cmap='gray')
 
 # Turn off LED matrix and camera             
 led_matrix.off()

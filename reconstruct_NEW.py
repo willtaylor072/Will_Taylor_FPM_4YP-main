@@ -22,6 +22,10 @@ results_folder = 'results/recent' # Save results here
 grid_size = 15
 img_size = 300 # Individual reconstruction size, 100-300
 
+# If True, reconstruct entire frame by stitching together multiple reconstructions
+# If False, we will select a small tile to reconstruct
+full_reconstruction = False 
+
 # Set parameters for reconstruction algorithm
 options = {
     'max_iter': 8, # Number of iterations
