@@ -15,8 +15,8 @@ import gpiod
 import fpm_functions as fpm 
 importlib.reload(fpm) # Reload
 
-# Data gathering script for FPM. Gather entire camera FOV, so we can reconstruct full frame later. 
-# For a cropped dataset use main.py. 
+# Data gathering script for FPM. Gather entire camera FOV, so we can reconstruct full frame later
+# For a cropped dataset use main.py
 
 ##########################################################################################################
 # Key setup variables
