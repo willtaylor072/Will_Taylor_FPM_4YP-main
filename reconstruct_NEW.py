@@ -32,17 +32,17 @@ options = {
     'beta': 1, # Regularisation parameter for pupil update
     'LED_correction': 0, # 0, off; 1, accurate; 2, fast; 3, first iteration only
     'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE. Update method, ePIE reccomended
-    'momentum': False, # Use momentum on alpha and beta (tuned for ePIE only)
+    'momentum': True, # Use momentum on alpha and beta (tuned for ePIE only)
     'intensity_correction': True, # Adjust image intensity to account for LED variation
 }
 
 # Optical system parameters
-LED2SAMPLE = 50
-x_initial = 0.5
-y_initial = -0.5
+LED2SAMPLE = 51
+x_initial = 0
+y_initial = 0
 LED_P = 3.3
 NA = 0.1
-PIX_SIZE = 850e-9 # 1150 for 3x, 725 for new (measured), 850 for 4x (expected)
+PIX_SIZE = 725e-9 # 1150 for 3x, 725 for new (measured), 850 for 4x (expected)
 WLENGTH = 550e-9
 
 # LED sequence    
@@ -146,7 +146,7 @@ if not full_reconstruction:
     crop_start_y = int(y_lim/2 - img_size/2)
     
     # Select plotting options
-    options['plot_magnitude'] = True # Plot magnitude or phase (can change in UI)
+    options['plot_magnitude'] = False # Plot magnitude or phase (can change in UI)
     options['plot_mode'] = 1 # Plot every iteration
 
     # Axis 0 will be full brightfield, axis 1 will be cropped region to reconstruct
@@ -243,7 +243,7 @@ if not full_reconstruction:
             F_img = fpm.FT(img) # Fourier transformed image
             F_img = F_img * pupil_binary # Apply pupil function
             pad_width = int((obj_size - img_size) / 2) # Padding to make correct size
-            obj = np.pad(F_img,pad_width,'constant',constant_values=0) # Initial object in spacial frequency (Fourier domain)
+            obj = np.pad(F_img,pad_width,'constant',constant_values=0) # Initial object spectrum
             
             # Main function for FPM reconstruction
             rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes)    
@@ -259,11 +259,14 @@ elif full_reconstruction:
     fig.suptitle('Fourier Ptychography - Full FOV Reconstruction')
     
     img_size = 200 # Tile size
-    overlap = 10 # Overlap between tiles for smoothing later
+    overlap = 30 # Overlap between tiles for smoothing, 10-30
     step_size = img_size - overlap
     
+    upsampling_ratio = 5 # Specify upsampling ratio, 2-5
+    obj_size = upsampling_ratio * img_size
+    
     # Select plotting options
-    options['plot_magnitude'] = True # Plot magnitude or phase (can change in UI)
+    options['plot_magnitude'] = False # Plot magnitude or phase (can change in UI)
     options['plot_mode'] = 0 # We will only plot when object is returned (save time)
     
     # Generate crop start positions ensuring full coverage
@@ -280,14 +283,14 @@ elif full_reconstruction:
     
     # Axis 0 will be full brightfield, axis 1 will be reconstructed tiles
     axes[0].set_aspect(x_lim / y_lim)  # Aspect ratio for the full frame
-    full_frame_plot = axes[0].imshow(brightfield,cmap='gray')
-    axes[1].set_aspect('equal')  # Aspect ratio for the cropped frame is square
+    axes[0].imshow(brightfield,cmap='gray')
     abort_script = False
     do_reconstruction = False
     
     # Set the data on axis 1
-    placeholder_cropped = np.zeros((img_size, img_size), dtype=np.uint8)  # Cropped size
-    cropped_frame_plot = axes[1].imshow(placeholder_cropped, vmin=0, vmax=1,cmap='gray')  # Cropped frame plot
+    placeholder_cropped = np.zeros((obj_size, obj_size))  # Cropped size
+    cropped_frame_plot = axes[1].imshow(placeholder_cropped,cmap='gray')  # Cropped frame plot
+    axes[1].set_aspect('equal')  # Aspect ratio for the cropped frame is square
     
     # Add buttons below the figure
     button_ax_reconstruct = fig.add_axes([0.55, 0.02, 0.15, 0.05]) # [left, bottom, width, height]
@@ -309,14 +312,33 @@ elif full_reconstruction:
         if do_reconstruction: 
             do_reconstruction = False
             
+            # Determine full size object
+            full_size_x,full_size_y = (crop_start_xs[-1]+img_size)*upsampling_ratio,(crop_start_ys[-1]+img_size)*upsampling_ratio
+            # print(full_size_x,full_size_y)
+            full_object = np.zeros((full_size_y,full_size_x)) # Will store entire recovered object
+            
+            # Initialise plots
+            full_frame_plot = axes[0].imshow(full_object,cmap='gray',vmin=0,vmax=1) # Show the full object (as it gets built)
+            cropped_frame_plot = axes[1].imshow(np.zeros((obj_size, obj_size)), cmap='gray',vmin=0,vmax=1)  # Placeholder for recovered object
+            
+            sampling_size = 1/(img_size*PIX_SIZE) # Sampling size in the Fourier domain (used to scale wavevectors for indexing)
+            # LED wavevectors - scaled for indexing in Fourier domain. To get true wavevectors multiply by sampling size * 2pi
+            kx,ky = fpm.calculate_wavevectors(x_abs, y_abs, LED2SAMPLE, WLENGTH, sampling_size)
+
+            # Initial pupil function (binary mask)
+            # x,y is our normalised frequency domain for the images, cutoff frequency = 1 (both x and y)
+            x,y = np.meshgrid(np.linspace(-SAMPLING_RATIO,SAMPLING_RATIO,img_size), np.linspace(-SAMPLING_RATIO,SAMPLING_RATIO,img_size))
+            theta,r = np.arctan2(y,x), np.sqrt(x**2 + y**2) # Polar coordinates
+            # pupil_radius = (1/SAMPLING_RATIO) * (img_size/2) # In pixels
+            # pupil_radius = NA/WLENGTH * img_size * PIX_SIZE
+            pupil_binary = r<1 # Binary mask for frequencies below cutoff frequency (higher frequencies cannot be resolved due to diffraction)
+
             for crop_start_x in crop_start_xs:
+                if abort_script:
+                    break
                 for crop_start_y in crop_start_ys:
-                    
-                    # Add rectangle to show crop region
-                    for patch in list(axes[0].patches): # Clear all patches before adding a new one
-                        patch.remove()  # Remove each patch from the axis
-                    rectangle = patches.Rectangle((crop_start_x, crop_start_y),img_size, img_size, linewidth=2, edgecolor='red', facecolor='none')
-                    axes[0].add_patch(rectangle)  # Add rectangle to full frame view
+                    if abort_script:
+                        break
                     
                     # # Use the crop region specified to form dataset (much slower)
                     # images = np.zeros((img_size,img_size,num_images)) # Initialise array for storing images
@@ -327,25 +349,7 @@ elif full_reconstruction:
                     #     images[:,:,i] = img
                     
                     images = full_images[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size,:]
-                        
-                    # Setup ptychography parameters
                     
-                    # img_size * PIX_SIZE is the total object size in spacial domain (~300um)
-                    sampling_size = 1/(img_size*PIX_SIZE) # Sampling size in the Fourier domain (used to scale wavevectors for indexing)
-                    # Size of reconstructed object (for given parameters upsampling is between 2 and 5 depending on grid_size)
-                    upsampling_ratio = fpm.calculate_upsampling_ratio(img_size, grid_size, LED2SAMPLE, LED_P, NA, WLENGTH, sampling_size)
-                    obj_size = upsampling_ratio * img_size
-                    # LED wavevectors - scaled for indexing in Fourier domain. To get true wavevectors multiply by sampling size * 2pi
-                    kx,ky = fpm.calculate_wavevectors(x_abs, y_abs, LED2SAMPLE, WLENGTH, sampling_size)
-
-                    # Initial pupil function (binary mask)
-                    # x,y is our normalised frequency domain for the images, cutoff frequency = 1 (both x and y)
-                    x,y = np.meshgrid(np.linspace(-SAMPLING_RATIO,SAMPLING_RATIO,img_size), np.linspace(-SAMPLING_RATIO,SAMPLING_RATIO,img_size))
-                    theta,r = np.arctan2(y,x), np.sqrt(x**2 + y**2) # Polar coordinates
-                    # pupil_radius = (1/SAMPLING_RATIO) * (img_size/2) # In pixels
-                    # pupil_radius = NA/WLENGTH * img_size * PIX_SIZE
-                    pupil_binary = r<1 # Binary mask for frequencies below cutoff frequency (higher frequencies cannot be resolved due to diffraction)
-
                     # Initial object estimate (using central image)
                     img = np.sqrt(images[:,:,0]) # Amplitude of central image
                     F_img = fpm.FT(img) # Fourier transformed image
@@ -357,10 +361,38 @@ elif full_reconstruction:
                     rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes) 
                     
                     # Show recovered object on axis 1
-                    cropped_frame_plot.set_data(np.abs(rec_obj))
+                    if options['plot_magnitude']:
+                        obj = np.abs(rec_obj)       
+                    else:
+                        obj = np.angle(rec_obj)
+                        
+                    # Normalise and set data
+                    obj -= np.min(obj)
+                    obj /= np.max(obj)
+                    cropped_frame_plot.set_data(obj)
+                    
+                    # Insert into full object and display on axis 0
+                    x,y = crop_start_x*upsampling_ratio,crop_start_y*upsampling_ratio
+                    # full_object[y:y+obj_size,x:x+obj_size] = obj # Insert directly (will have lines at joints)
+                    fpm.blend_tile(full_object,obj,x,y,obj_size,overlap) # Modifies full_object in place
+                    full_frame_plot.set_data(full_object)
+                    
                     plt.pause(0.1) # Pause to allow plotting
-                    
-                    if abort_script: # Enable us to abort
-                        break
-                    
-                    
+            
+            # Save object and brightfield
+            full_object -= np.min(full_object)
+            full_object /= np.max(full_object) # Convert to 0-1
+            full_object = (full_object * 255).astype(np.uint8) # Convert to 0-255 and uint8
+            name = 'full_frame_magnitude.png' if options['plot_magnitude'] else 'full_frame_phase.png'
+            Image.fromarray(full_object).save(os.path.join(results_folder,name))
+            
+            brightfield -= np.min(brightfield)
+            brightfield /= np.max(brightfield) # Convert to 0-1
+            brightfield = (brightfield * 255).astype(np.uint8) # Convert to 0-255 and uint8
+            Image.fromarray(brightfield).save(os.path.join(results_folder,'brightfield.png'))
+            
+            # Keep plot open
+            axes[0].set_title('Finished reconstruction and saved to results folder')
+            plt.ioff()
+            plt.show()
+    

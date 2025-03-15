@@ -100,6 +100,54 @@ def FT(x):
 def IFT(x):
     return ifft2(ifftshift(x))
 
+# Blend function for reconstruct_NEW (in spacial domain)
+def blend_tile(full_object, obj, x, y, tile_size, overlap):
+    """
+    Blends a new recovered tile into the full_object with given overlap.
+
+    Parameters:
+        full_object (numpy array): The full reconstructed image.
+        obj (numpy array): The new tile to be merged.
+        x (int): X-coordinate of the top-left corner of the tile.
+        y (int): Y-coordinate of the top-left corner of the tile.
+        tile_size (int): Size of the square tile.
+        overlap (int): Overlap size in pixels.
+
+    Returns:
+        None (modifies full_object in-place).
+    """
+    # Extract region from full_object that will be updated
+    existing_region = full_object[y:y+tile_size, x:x+tile_size]
+    
+    # Create a blending weight matrix
+    blend_weight = np.ones((tile_size, tile_size))
+
+    # Apply a linear blend in overlap regions
+    if x > 0:  # Left overlap
+        for i in range(overlap):
+            blend_weight[:, i] = i / overlap  # Linear weight from 0 to 1
+
+    if y > 0:  # Top overlap
+        for j in range(overlap):
+            blend_weight[j, :] = j / overlap  # Linear weight from 0 to 1
+
+    # Ensure smooth transition in corners (average the two blending directions)
+    if x > 0 and y > 0:
+        for i in range(overlap):
+            for j in range(overlap):
+                blend_weight[j, i] = (i / overlap) * (j / overlap)
+
+    # Merge using weighted average where full_object is nonzero
+    mask = (existing_region != 0)  # Identify existing (non-zero) pixels
+    full_object[y:y+tile_size, x:x+tile_size][mask] = (
+        existing_region[mask] * (1 - blend_weight[mask]) +
+        obj[mask] * blend_weight[mask]
+    )
+
+    # For regions that were previously zero, just insert the new tile
+    full_object[y:y+tile_size, x:x+tile_size][~mask] = obj[~mask]
+
+
 # Plotting for visualising reconstruction (regular python version, single axis to plot on)
 def plot_py(fig,axes,obj,plot_magnitude):
     # We use axes[1] to show object
@@ -110,7 +158,6 @@ def plot_py(fig,axes,obj,plot_magnitude):
     else:
         axes[1].imshow(np.angle(IFT(obj)), cmap='gray')
         axes[1].set_title('Reconstructed object (phase)')
-    
     
     # Update the figure
     plt.draw()   
@@ -329,9 +376,6 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             
             # PIE update
             if update_method == 1:
-                # Momentum can still be used (less obvious)
-                # alpha = 0.2*(1+iter)
-                
                 # Original PIE updates
                 # # Object update
                 # numerator = np.abs(pupil) * np.conj(pupil) * (update_wave-exit_wave)
@@ -360,10 +404,6 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
             
             # ePIE update
             elif update_method == 2:
-                # Momentum
-                # alpha = 0.3 + iter * 0.2
-                # beta = 0.3 + iter * 0.2
-                
                 # Object update
                 numerator = alpha * np.conj(pupil) * (update_wave-exit_wave)
                 denominator = np.max(np.abs(pupil))**2
@@ -377,8 +417,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
                 pupil += pupil_update
                 
             # rPIE update
-            elif update_method == 3:
-                
+            elif update_method == 3:   
                 # Object update
                 numerator = np.conj(pupil) * (update_wave-exit_wave)
                 denominator = (1-alpha) * np.abs(pupil)**2 + alpha * np.max(np.abs(pupil))**2
@@ -417,8 +456,8 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
 
         # Momentum, tuned for ePIE
         if momentum:
-            alpha+=0.13
-            beta+=0.13
+            alpha+=0.15
+            beta+=0.15
             
         # Status message
         progress = int((iter+1)/max_iter * 100)
