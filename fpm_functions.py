@@ -101,11 +101,16 @@ def IFT(x):
     return ifft2(ifftshift(x))
 
 # Plotting for visualising reconstruction (regular python version, single axis to plot on)
-def plot_py(fig,axes,obj):
+def plot_py(fig,axes,obj,plot_magnitude):
     # We use axes[1] to show object
     axes[1].cla()  # Clear the current axes
-    axes[1].imshow(np.abs(IFT(obj)), cmap='gray')
-    axes[1].set_title('Currently reconstructed object')
+    if plot_magnitude:
+        axes[1].imshow(np.abs(IFT(obj)), cmap='gray')
+        axes[1].set_title('Reconstructed object (magnitude)')
+    else:
+        axes[1].imshow(np.angle(IFT(obj)), cmap='gray')
+        axes[1].set_title('Reconstructed object (phase)')
+    
     
     # Update the figure
     plt.draw()   
@@ -280,11 +285,12 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
     alpha = options['alpha'] # Regularisation for object update
     beta = options['beta'] # Regularisation for pupil update
     max_iter = options['max_iter'] # Number of iterations to run algorithm (1 iteration uses all images)
-    plot_mode = options['plot_mode'] # If using .py use 0,1. For notebook use 2,3
+    plot_mode = options['plot_mode'] # If using .py use 0/1. For notebook use 2/3
     update_method = options['update_method'] # 1 for QN, 2 for EPRY (alpha beta need to be changed accordingly)
     LED_correction = options['LED_correction'] # Do correction for kx,ky - LED coordinates
     momentum = options['momentum'] # Add momentum to alpha and beta after each iteration
     intensity_correction = options['intensity_correction'] # Correct for LED intensity variations
+    plot_magnitude = options.get('plot_magnitude', True) # Plot magnitude or phase
     
     # Other parameters
     img_size = images.shape[0] # Square, same size as pupil function
@@ -421,7 +427,7 @@ def reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes, pupil=Non
         
         # Plot every iteration
         if plot_mode == 1:
-            plot_py(fig,axes,obj) # Plotting for main.py 
+            plot_py(fig,axes,obj,plot_magnitude) # Plotting for main.py 
         elif plot_mode == 3:
             plot_ipynb(fig,axes,obj,x_start,y_start,img_size,obj_center,pupil,kx,ky,i,iter,plot_mode,error) # Plotting for notebook
     

@@ -1,10 +1,10 @@
 Will Taylor 4th year project code for Fourier ptychographic microscopy 
 
 KEY SCRIPTS
-* reconstruction.ipynb is the Jupyter notebook version for the Fourier reconstruction
-* gather_data.ipynb is the Jupyter notebook version for gathering the dataset of images
+* gather_data_NEW.py for taking datasets (full frame)
+* reconstruct_NEw.py for reconstructing the dataset (full frame)
 
-* main.py does whole process in one script
+* main.py has combined code but only for cropped regions
 * fpm_functions.py contains functions for all scripts
 
 gpioset gpiochip4 45=0 to turn fan on on RPi

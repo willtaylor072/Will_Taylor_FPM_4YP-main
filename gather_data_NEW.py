@@ -16,13 +16,13 @@ import fpm_functions as fpm
 importlib.reload(fpm) # Reload
 
 # Data gathering script for FPM. Gather entire camera FOV, so we can reconstruct full frame later
-# For a cropped dataset use main.py
+# To take a cropped dataset use main.py
 
 ##########################################################################################################
 # Key setup variables
 
 data_folder = 'data/recent' # For saving data images
-crop_size = 300 # For preview
+img_size = 300 # Small image size (for preview)
 
 grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
 num_images = grid_size**2
@@ -32,8 +32,8 @@ fpm_exposure = int(500e3)  # In microseconds for FPM image capture, 300-600ms
 led_color = 'white' # Illumination color
 x_coords,y_coords = fpm.LED_spiral(grid_size,x_offset=1,y_offset=0) # LED sequence (ensure first LED is aligned with optical axis)
 
-crop_start_x = int(1456/2 - crop_size/2) # For preview
-crop_start_y = int(1088/2 - crop_size/2)
+crop_start_x = int(1456/2 - img_size/2) # For preview
+crop_start_y = int(1088/2 - img_size/2)
 
 ## Miscelaneous 
 
@@ -68,6 +68,7 @@ cleanup()
 # Set up figure - this will be the main UI for the entire process
 plt.ion() # Allow live plotting
 fig, axes = plt.subplots(1, 2, figsize=(10, 5))  # Figure size (10x5)
+fig.suptitle('Fourier Ptychography - Data Gathering')
 
 # Axis 0 will be full FOV, axis 1 will be cropped region
 axes[0].set_aspect(1456 / 1088)  # Aspect ratio for the full frame
@@ -98,7 +99,7 @@ continue_script = False
 
 # Handles arrow key crop adjustments
 def on_key(event):
-    global quit_preview, crop_start_x, crop_start_y
+    global crop_start_x, crop_start_y
     match event.key:
         case 'up': 
             crop_start_y -= 5
@@ -126,7 +127,7 @@ fig.canvas.mpl_connect('key_press_event', on_key)
 
 # Placeholder arrays for initialization (makes plotting faster)
 placeholder_frame = np.zeros((1088, 1456), dtype=np.uint8)  # Full frame size
-placeholder_cropped = np.zeros((crop_size, crop_size), dtype=np.uint8)  # Cropped size
+placeholder_cropped = np.zeros((img_size, img_size), dtype=np.uint8)  # Cropped size
 
 # Initialize the plots
 full_frame_plot = axes[0].imshow(placeholder_frame, vmin=0, vmax=255)  # Full frame plot
@@ -146,7 +147,7 @@ while not (abort_script or continue_script):
     # print(camera.capture_metadata())
     # Capture frames
     frame = camera.capture_array()  # Entire region
-    cropped_frame = frame[crop_start_y:crop_start_y+crop_size, crop_start_x:crop_start_x+crop_size]  # Cropped region
+    cropped_frame = frame[crop_start_y:crop_start_y+img_size, crop_start_x:crop_start_x+img_size]  # Cropped region
 
     # Update plot data without clearing
     full_frame_plot.set_data(frame)
@@ -155,7 +156,7 @@ while not (abort_script or continue_script):
     # Add rectangle to show crop region
     for patch in list(axes[0].patches): # Clear all patches before adding a new one
         patch.remove()  # Remove each patch from the axis
-    rectangle = patches.Rectangle((crop_start_x, crop_start_y),crop_size, crop_size, linewidth=2, edgecolor='red', facecolor='none')
+    rectangle = patches.Rectangle((crop_start_x, crop_start_y),img_size, img_size, linewidth=2, edgecolor='red', facecolor='none')
     axes[0].add_patch(rectangle)  # Add rectangle to full frame view
 
     # Rescale axes to fit data
@@ -182,7 +183,7 @@ elif continue_script:
     brightfield = np.array(brightfield_pil) # Keep as array
 
     # Define the data grid (single large grayscale image for visualization)
-    downsampled_size = crop_size // 15  # Each image should be this small
+    downsampled_size = img_size // 15  # Each image should be this small
     data_grid = np.zeros((15 * downsampled_size, 15 * downsampled_size), dtype=np.uint8)
 
     # Update main figure to indicate FPM process has begun
