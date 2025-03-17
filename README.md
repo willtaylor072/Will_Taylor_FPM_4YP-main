@@ -2,7 +2,8 @@ Will Taylor 4th year project code for Fourier ptychographic microscopy
 
 KEY SCRIPTS
 * gather_data_NEW.py for taking datasets (full frame)
-* reconstruct_NEw.py for reconstructing the dataset (full frame)
+* reconstruct_NEW.py for reconstructing the dataset (full frame)
+* results_viewer.py for viewing full frame reconstructions
 
 * main.py has combined code but only for cropped regions
 * fpm_functions.py contains functions for all scripts
@@ -37,14 +38,10 @@ KEY FINDINGS AND CONSIDERATIONS
 Central LED (first LED in sequence) should be close to optical axis. If it is not directly aligned with
 the optical axis (i.e. vertically through aperture of objective) then we need to use x_offset and y_offset
 within LED_spiral algorithm to fix. For each offset unit we reduce max grid size by 1. I.e. for 1,1 offset max grid size is 15.
-For consistancy use LED rotation of 135 degrees so that LED (0,0) is in indicated position (back left).
+For consistancy use LED rotation of 135 degrees so that LED (0,0) is in indicated position on microscope (back left).
 
 The path from the top of the objective to the camera lens must be covered in order to avoid ambient light from washing out the signal. 
 Adjusting the z stage to focus will slightly move the image (due to tilting), so do this first and then align x,y. 
-
-In the fpm.reconstruction algorithm we can cheat to reconstruct an image
-estimated_image = np.copy(object_cropped) # Cheating but works (pseudo-ptychography)
-estimated_image = object_cropped * pupil # Correct method (actual ptychography)
 
 Momentum may be used to speed up recovery process.
 
@@ -52,7 +49,7 @@ Momentum may be used to speed up recovery process.
 The hole under the sample should be taped to 1.25x1.67mm to match the camera FOV and not let any unecessary light into the system from the 
 LEDs.
 
-Squiggly artefacts in reconstructed images are very sensitive to input k-vectors -> i.e. LED to sample distance and initial LED position
+Squiggly artefacts in reconstructed images are very sensitive to input wavevectors -> i.e. LED to sample distance and initial LED position
 
 Exposure time of 0.5s is good for USAF, lower exposures can be used if darkfield is being washed out (too bright or noisy)
 * 0.3s good for natural samples
@@ -113,11 +110,12 @@ Optical parameters:
 
 System parameters for V3 microscope:
 LED2SAMPLE: measure directly or see name (closest distance is about 50mm)
-x_offset = 1
-y_offset = 0 # This is the correct alignment for the sequence - (8,7) is central LED
 x_initial = 0.9
 y_initial = -0.5 # These can be finely tuned in sensitivity_testing.ipynb
-PIX_SIZE = 1150e-9 (measured for usaf_v3_47), 863e-9 for 4x magnification 
+PIX_SIZE = 1150e-9 (measured for usaf_v3_47), 850 for 4x magnification, 725 measured value
+LED sequence offset
+x_offset = 1
+y_offset = 0 # This is the correct alignment for the sequence - (8,7) is central LED
 
 System parameters for V2 microscope:
 LED2SAMPLE = 80 # Distance from LED array to the sample, mm (larger distance leads to closer overlapping Fourier circles)
