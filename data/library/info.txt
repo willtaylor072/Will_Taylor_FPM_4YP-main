@@ -43,3 +43,5 @@ diamond_3 is the ~1.5um center to center lines
 diamond_4 is dots of decreasing separation, 1um, 0.75um, 0.5, 0.5, 0.75, 0.75
 
 same for water samples
+
+talia_full_field - 50mm LED2SAMPLE, 500ms white light

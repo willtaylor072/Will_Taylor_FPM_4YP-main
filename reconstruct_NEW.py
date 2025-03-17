@@ -23,7 +23,7 @@ grid_size = 15 # Can decrease to speed up process (but lower resolution)
 
 # If True, reconstruct entire frame by stitching together multiple reconstructions
 # If False, we will select a small tile to reconstruct, one at a time
-full_reconstruction = False 
+full_reconstruction = True 
 
 # Set parameters for reconstruction algorithm
 options = {
@@ -31,13 +31,13 @@ options = {
     'alpha': 1, # Regularisation parameter for object update
     'beta': 1, # Regularisation parameter for pupil update
     'LED_correction': 0, # 0, off; 1, accurate; 2, fast; 3, first iteration only
-    'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE. Update method, ePIE reccomended
+    'update_method': 3, # 1, PIE; 2, ePIE; 3, rPIE. Update method, ePIE reccomended
     'momentum': True, # Use momentum on alpha and beta (tuned for ePIE only)
     'intensity_correction': True, # Adjust image intensity to account for LED variation
 }
 
 # Optical system parameters
-LED2SAMPLE = 48
+LED2SAMPLE = 50
 x_initial = 0
 y_initial = 0
 LED_P = 3.3

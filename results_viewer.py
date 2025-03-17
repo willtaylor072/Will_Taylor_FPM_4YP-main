@@ -16,7 +16,7 @@ importlib.reload(fpm) # Reload
 ##########################################################################################################
 
 # Folders
-results_folder = 'results/library/germs_full_fov' 
+results_folder = 'results/library/talia_full_field' 
 
 # Select the reconstructions we have 
 have_magnitude = True
