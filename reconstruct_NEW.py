@@ -37,7 +37,7 @@ options = {
 }
 
 # Optical system parameters
-LED2SAMPLE = 70
+LED2SAMPLE = 72
 x_initial = 0.9
 y_initial = -0.5
 LED_P = 3.3
@@ -315,7 +315,8 @@ elif full_reconstruction:
             # Determine full size object
             full_size_x,full_size_y = (crop_start_xs[-1]+img_size)*upsampling_ratio,(crop_start_ys[-1]+img_size)*upsampling_ratio
             # print(full_size_x,full_size_y)
-            full_object = np.zeros((full_size_y,full_size_x)) # Will store entire recovered object
+            full_object = np.array(Image.fromarray(brightfield).resize((full_size_x,full_size_y)))
+            # full_object = np.zeros((full_size_y,full_size_x)) # Will store entire recovered object
             
             # Initialise plots
             full_frame_plot = axes[0].imshow(full_object,cmap='gray',vmin=0,vmax=1) # Show the full object (as it gets built)
@@ -379,20 +380,21 @@ elif full_reconstruction:
                     
                     plt.pause(0.1) # Pause to allow plotting
             
-            # Save object and brightfield
-            full_object -= np.min(full_object)
-            full_object /= np.max(full_object) # Convert to 0-1
-            full_object = (full_object * 255).astype(np.uint8) # Convert to 0-255 and uint8
-            name = 'magnitude.png' if options['plot_magnitude'] else 'phase.png'
-            Image.fromarray(full_object).save(os.path.join(results_folder,name))
-            
-            brightfield -= np.min(brightfield)
-            brightfield /= np.max(brightfield) # Convert to 0-1
-            brightfield = (brightfield * 255).astype(np.uint8) # Convert to 0-255 and uint8
-            Image.fromarray(brightfield).save(os.path.join(results_folder,'brightfield.png'))
-            
-            # Keep plot open
-            axes[0].set_title('Finished reconstruction and saved to results folder')
-            plt.ioff()
-            plt.show()
+            if not abort_script:
+                # Save object and brightfield
+                full_object -= np.min(full_object)
+                full_object /= np.max(full_object) # Convert to 0-1
+                full_object = (full_object * 255).astype(np.uint8) # Convert to 0-255 and uint8
+                name = 'magnitude.png' if options['plot_magnitude'] else 'phase.png'
+                Image.fromarray(full_object).save(os.path.join(results_folder,name))
+                
+                brightfield -= np.min(brightfield)
+                brightfield /= np.max(brightfield) # Convert to 0-1
+                brightfield = (brightfield * 255).astype(np.uint8) # Convert to 0-255 and uint8
+                Image.fromarray(brightfield).save(os.path.join(results_folder,'brightfield.png'))
+                
+                # Keep plot open
+                axes[0].set_title('Finished reconstruction and saved to results folder')
+                plt.ioff()
+                plt.show()
     
