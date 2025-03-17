@@ -16,14 +16,14 @@ importlib.reload(fpm) # Reload
 ##########################################################################################################
 
 # Folders
-data_folder = 'data/library/full_frame' # Get data from here
+data_folder = 'data/library/talia_full_frame' # Get data from here
 results_folder = 'results/recent' # Save results here
 
 grid_size = 15 # Can decrease to speed up process (but lower resolution)
 
 # If True, reconstruct entire frame by stitching together multiple reconstructions
 # If False, we will select a small tile to reconstruct, one at a time
-full_reconstruction = True 
+full_reconstruction = False 
 
 # Set parameters for reconstruction algorithm
 options = {
@@ -37,7 +37,7 @@ options = {
 }
 
 # Optical system parameters
-LED2SAMPLE = 51
+LED2SAMPLE = 48
 x_initial = 0
 y_initial = 0
 LED_P = 3.3
@@ -62,7 +62,7 @@ x_lim = brightfield.shape[1] # 1456
 y_lim = brightfield.shape[0] # 1088
 num_images = grid_size**2
 
-# Preload all images with full FOV (might run into memory issues on RPi) - works on laptop, 5-10s
+# Preload all images with full FOV ~7s on mac, ~15s on RPi
 full_images = np.zeros((y_lim,x_lim,num_images)) 
 for i in range(num_images): 
     filename = os.path.join(data_folder, f'image_{i}.png') # Construct path
