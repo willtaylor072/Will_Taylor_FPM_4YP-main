@@ -189,7 +189,7 @@ if not full_reconstruction:
     # Main process loop
     while not abort_script:
         # Cropped region of brightfield
-        cropped_frame = brightfield[crop_start_y:crop_start_y+img_size, crop_start_x:crop_start_x+img_size]  # Cropped region
+        cropped_frame = brightfield[crop_start_y:crop_start_y+img_size, crop_start_x:crop_start_x+img_size]
 
         # Update plot data without clearing
         cropped_frame_plot.set_data(cropped_frame)
@@ -383,7 +383,7 @@ elif full_reconstruction:
             full_object -= np.min(full_object)
             full_object /= np.max(full_object) # Convert to 0-1
             full_object = (full_object * 255).astype(np.uint8) # Convert to 0-255 and uint8
-            name = 'full_frame_magnitude.png' if options['plot_magnitude'] else 'full_frame_phase.png'
+            name = 'magnitude.png' if options['plot_magnitude'] else 'phase.png'
             Image.fromarray(full_object).save(os.path.join(results_folder,name))
             
             brightfield -= np.min(brightfield)
