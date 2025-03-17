@@ -61,7 +61,6 @@ Green LED light (550nm) worked well - didn't require much adjustment to exposure
 Objective is corrected for 550nm spherical aberrations, so may reduce noise in darkfield (not extensively tested)
 
 Main aberrations are spherical (and usually some defocus)
-
 Nominal upsampling ratio of 5 is usually good
 
 Data gathering time for 15x15 with 0.3-0.5s exposue ~ 90-120s
@@ -69,6 +68,7 @@ Reconstruction time for 300x300 greyscale image with 8 iterations using ePIE and
 ~ 3 min total
 
 For natural samples phase image can be really useful to see 3D structure of sample (especially when attenuation is low)
+Often the best LED2SAMPLE distance to use is 5mm LARGER than measured value (give more redundancy in recovery)
 
 USEFUL GITHUB COMMANDS
 git reset --hard origin/main    # Pulls the main repo regardless of any mess in the current working tree (overriding current device)

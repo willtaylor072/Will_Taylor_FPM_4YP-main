@@ -16,7 +16,7 @@ importlib.reload(fpm) # Reload
 ##########################################################################################################
 
 # Folders
-data_folder = 'data/library/talia_full_frame' # Get data from here
+data_folder = 'data/library/talia_full_frame_2' # Get data from here
 results_folder = 'results/recent' # Save results here
 
 grid_size = 15 # Can decrease to speed up process (but lower resolution)
@@ -37,12 +37,12 @@ options = {
 }
 
 # Optical system parameters
-LED2SAMPLE = 50
-x_initial = 0
-y_initial = 0
+LED2SAMPLE = 70
+x_initial = 0.9
+y_initial = -0.5
 LED_P = 3.3
 NA = 0.1
-PIX_SIZE = 725e-9 # 1150 for 3x, 725 for new (measured), 850 for 4x (expected)
+PIX_SIZE = 725e-9 # 1150 for 3x, 725 for 4x (measured)
 WLENGTH = 550e-9
 
 # LED sequence    

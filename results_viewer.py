@@ -16,7 +16,7 @@ importlib.reload(fpm) # Reload
 ##########################################################################################################
 
 # Folders
-results_folder = 'results/library/talia_full_field' 
+results_folder = 'results/library/talia_full_frame_2' 
 
 # Select the reconstructions we have 
 have_magnitude = True
