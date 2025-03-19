@@ -5,24 +5,20 @@ from matplotlib_scalebar.scalebar import ScaleBar
 import os
 from PIL import Image
 import numpy as np
-import importlib 
-
-# Custom functions
-import fpm_functions as fpm 
-importlib.reload(fpm) # Reload
 
 # Simple image viewer for full frame reconstructions
 
 ##########################################################################################################
 
 # Folders
-results_folder = 'results/library/talia_full_frame_2' 
+# results_folder = 'results/library/talia_full_frame_2' 
+results_folder = 'results/library/zea_seed'
 
 # Select the reconstructions we have 
 have_magnitude = True
 have_phase = True
 
-PIX_SIZE = 0.725 # Brightfield pixel size in um
+PIX_SIZE = 1.150 # Brightfield pixel size in um, 0.725 for 4x, 1.150 for 3x
 
 # Read images from folder
 brightfield = np.array(Image.open(os.path.join(results_folder,'brightfield.png')))/255
@@ -128,8 +124,11 @@ button_abort = Button(button_ax_abort, 'Abort')
 button_abort.on_clicked(abort_callback)
 
 # Add scale bar to brightfield crop
-scalebar = ScaleBar(PIX_SIZE, "um", length_fraction=0.25)
-axes[0,1].add_artist(scalebar)
+try:
+    scalebar = ScaleBar(PIX_SIZE, "um", length_fraction=0.25)
+    axes[0,1].add_artist(scalebar)
+except:
+    print('Do pip install matplotlib.scalebar for scalebar')
 
 # Add rectangle to full FOV brightfield
 rectangle = patches.Rectangle((crop_start_x, crop_start_y), img_size, img_size, linewidth=2, edgecolor='red', facecolor='none')

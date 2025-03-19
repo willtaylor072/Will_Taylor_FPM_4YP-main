@@ -94,7 +94,7 @@ def on_key(event):
             crop_start_x += v_x
             crop_start_x = min(crop_start_x,x_lim-img_size)
         case 'w':
-            img_size = min(img_size+5,500)
+            img_size = min(img_size+5,1000)
         case 'e':
             img_size = max(img_size-5,100)
 
@@ -258,7 +258,7 @@ elif full_reconstruction:
     fig, axes = plt.subplots(1, 2, figsize=(10, 5),gridspec_kw={'width_ratios': [2, 1]})
     fig.suptitle('Fourier Ptychography - Full FOV Reconstruction')
     
-    img_size = 200 # Tile size
+    img_size = 250 # Tile size, 200-300
     overlap = 30 # Overlap between tiles for smoothing, 10-30
     step_size = img_size - overlap
     
