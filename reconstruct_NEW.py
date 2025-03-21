@@ -17,17 +17,18 @@ importlib.reload(fpm) # Reload
 # TODO
 
 # Specify folders for data and results
-data_folder = 'data/recent' # Get data from here
+data_folder = 'data/library/talia_ff_new' # Get data from here
 results_folder = 'results/recent' # Save results here
 
 # Setup
-full_reconstruction = False # Select mode
+full_reconstruction = True # Select mode
 remove_edge_NA = True # Remove images on edge of brightfield
-edge_NA = [9,10,11,12,13,16,17,18,19] # Images in the dataset which are half brightfield half darkfield 
+# edge_NA = [9,10,11,12,13,16,17,18,19] # Images in the dataset which are half brightfield half darkfield 
+edge_NA = [10,11,12,13,16,17,18,19]
 grid_size = 15 # Can decrease to speed up process (but lower resolution)
 
 # Specify optical system parameters
-LED2SAMPLE = 70 # Measure, then perhaps add 5mm
+LED2SAMPLE = 72 # Measure, then perhaps add 5mm
 x_initial = 0.9 # Should not need changing
 y_initial = -0.5 # Ditto
 LED_P = 3.3 # Ditto
