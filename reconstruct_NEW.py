@@ -14,16 +14,27 @@ importlib.reload(fpm) # Reload
 # Reconstruction for FPM datasets - full frame only (use reconstruct_OLD.ipynb for cropped datasets)
 
 ##########################################################################################################
+# TODO
 
-# Folders
-data_folder = 'data/library/talia_full_frame_2' # Get data from here
+# Specify folders for data and results
+data_folder = 'data/library/talia_full_frame' # Get data from here
 results_folder = 'results/recent' # Save results here
 
+# Setup
+full_reconstruction = True # Select mode
+remove_edge_NA = True # Remove images on edge of brightfield
+# edge_NA = [9,10,11,12,13,16,17,18,19] # Images in the dataset which are half brightfield half darkfield 
+edge_NA = [2,3,7,8,9,15]
 grid_size = 15 # Can decrease to speed up process (but lower resolution)
 
-# If True, reconstruct entire frame by stitching together multiple reconstructions
-# If False, we will select a small tile to reconstruct, one at a time
-full_reconstruction = True 
+# Specify optical system parameters
+LED2SAMPLE = 50 # Measure, then perhaps add 5mm
+x_initial = 0.9 # Should not need changing
+y_initial = -0.5 # Ditto
+LED_P = 3.3 # Ditto
+NA = 0.1 # Ditto
+PIX_SIZE = 725e-9 # 1150 for 3x, 725 for 4x (measured)
+WLENGTH = 550e-9 # For white or green, 500nm
 
 # Set parameters for reconstruction algorithm
 options = {
@@ -36,14 +47,7 @@ options = {
     'intensity_correction': True, # Adjust image intensity to account for LED variation
 }
 
-# Optical system parameters
-LED2SAMPLE = 72
-x_initial = 0.9
-y_initial = -0.5
-LED_P = 3.3
-NA = 0.1
-PIX_SIZE = 725e-9 # 1150 for 3x, 725 for 4x (measured)
-WLENGTH = 550e-9
+##############################################################################################################
 
 # LED sequence    
 x_coords, y_coords = fpm.LED_spiral(grid_size)
@@ -206,17 +210,7 @@ if not full_reconstruction:
         if do_reconstruction:
             do_reconstruction = False
             
-            # # Use the crop region specified to form dataset
-            # images = np.zeros((img_size,img_size,num_images)) # Initialise array for storing images
-            # brightfield_crop = brightfield[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size]
-            # # Best to read images one at a time to avoid memory issues (especially for full frame datasets)
-            # for i in range(num_images): # ~ 2s to load all 256 images into array
-            #     filename = os.path.join(data_folder, f'image_{i}.png') # Construct path
-            #     img = np.array(Image.open(filename),dtype=np.uint8) # Open image as numpy array
-            #     img = img[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size] # Crop
-            #     images[:,:,i] = img
-            
-            # Crop directly from loaded data (much faster)
+            # Crop directly from loaded data
             brightfield_crop = brightfield[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size]
             images = full_images[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size,:]
                 
@@ -229,6 +223,12 @@ if not full_reconstruction:
             obj_size = upsampling_ratio * img_size
             # LED wavevectors - scaled for indexing in Fourier domain. To get true wavevectors multiply by sampling size * 2pi
             kx,ky = fpm.calculate_wavevectors(x_abs, y_abs, LED2SAMPLE, WLENGTH, sampling_size)
+            
+            # Remove half bf half df images at edge of NA
+            if remove_edge_NA:
+                images = np.delete(images,edge_NA,axis=2)
+                kx = np.delete(kx,edge_NA)
+                ky = np.delete(ky,edge_NA)
 
             # Initial pupil function (binary mask)
             # x,y is our normalised frequency domain for the images, cutoff frequency = 1 (both x and y)
@@ -307,24 +307,30 @@ elif full_reconstruction:
     button_abort.on_clicked(abort_callback)
     
     while not abort_script: # Wait for button inputs
-        plt.pause(0.1)
+        plt.pause(0.5)
         # Reconstruct each tile when we click reconstruct
         if do_reconstruction: 
             do_reconstruction = False
             
-            # Determine full size object
+            # Determine full size object, use upscaled brightfield as template for plotting purposes
             full_size_x,full_size_y = (crop_start_xs[-1]+img_size)*upsampling_ratio,(crop_start_ys[-1]+img_size)*upsampling_ratio
             # print(full_size_x,full_size_y)
-            full_object = np.array(Image.fromarray(brightfield).resize((full_size_x,full_size_y)))
-            # full_object = np.zeros((full_size_y,full_size_x)) # Will store entire recovered object
+            full_object_m = np.array(Image.fromarray(brightfield).resize((full_size_x,full_size_y))) # Magnitude
+            full_object_p = np.copy(full_object_m) # Phase
             
             # Initialise plots
-            full_frame_plot = axes[0].imshow(full_object,cmap='gray',vmin=0,vmax=1) # Show the full object (as it gets built)
+            full_frame_plot = axes[0].imshow(full_object_m,cmap='gray',vmin=0,vmax=1) # Show the full object (as it gets built)
             cropped_frame_plot = axes[1].imshow(np.zeros((obj_size, obj_size)), cmap='gray',vmin=0,vmax=1)  # Placeholder for recovered object
             
             sampling_size = 1/(img_size*PIX_SIZE) # Sampling size in the Fourier domain (used to scale wavevectors for indexing)
             # LED wavevectors - scaled for indexing in Fourier domain. To get true wavevectors multiply by sampling size * 2pi
             kx,ky = fpm.calculate_wavevectors(x_abs, y_abs, LED2SAMPLE, WLENGTH, sampling_size)
+            
+            # Remove half bf half df images at edge of NA
+            if remove_edge_NA:
+                full_images = np.delete(full_images,edge_NA,axis=2)
+                kx = np.delete(kx,edge_NA)
+                ky = np.delete(ky,edge_NA)
 
             # Initial pupil function (binary mask)
             # x,y is our normalised frequency domain for the images, cutoff frequency = 1 (both x and y)
@@ -341,14 +347,7 @@ elif full_reconstruction:
                     if abort_script:
                         break
                     
-                    # # Use the crop region specified to form dataset (much slower)
-                    # images = np.zeros((img_size,img_size,num_images)) # Initialise array for storing images
-                    # for i in range(num_images): # ~ 2s to load all 256 images into array
-                    #     filename = os.path.join(data_folder, f'image_{i}.png') # Construct path
-                    #     img = np.array(Image.open(filename),dtype=np.uint8) # Open image as numpy array
-                    #     img = img[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size] # Crop
-                    #     images[:,:,i] = img
-                    
+                    # Crop dataset images
                     images = full_images[crop_start_y:crop_start_y+img_size,crop_start_x:crop_start_x+img_size,:]
                     
                     # Initial object estimate (using central image)
@@ -361,32 +360,42 @@ elif full_reconstruction:
                     # Main function for FPM reconstruction
                     rec_obj,rec_pupil,kx_updated,ky_updated = fpm.reconstruct(images, kx, ky, obj, pupil_binary, options, fig, axes) 
                     
-                    # Show recovered object on axis 1
-                    if options['plot_magnitude']:
-                        obj = np.abs(rec_obj)       
-                    else:
-                        obj = np.angle(rec_obj)
-                        
-                    # Normalise and set data
-                    obj -= np.min(obj)
-                    obj /= np.max(obj)
-                    cropped_frame_plot.set_data(obj)
+                    obj_m = np.abs(rec_obj) # Magnitude
+                    obj_p = np.angle(rec_obj) # Phase
                     
-                    # Insert into full object and display on axis 0
+                    # Normalise
+                    obj_m -= np.min(obj_m)
+                    obj_m /= np.max(obj_m)
+                    obj_p -= np.min(obj_p)
+                    obj_p /= np.max(obj_p)
+                    
+                    # Insert into full object for both magnitude and phase
                     x,y = crop_start_x*upsampling_ratio,crop_start_y*upsampling_ratio
                     # full_object[y:y+obj_size,x:x+obj_size] = obj # Insert directly (will have lines at joints)
-                    fpm.blend_tile(full_object,obj,x,y,obj_size,overlap) # Modifies full_object in place
-                    full_frame_plot.set_data(full_object)
+                    fpm.blend_tile(full_object_m,obj_m,x,y,obj_size,overlap) # Modifies in place
+                    fpm.blend_tile(full_object_p,obj_p,x,y,obj_size,overlap)
+                    
+                    # Set data depending on mode
+                    if options['plot_magnitude']:
+                        cropped_frame_plot.set_data(obj_m) 
+                        full_frame_plot.set_data(full_object_m)     
+                    else:
+                        cropped_frame_plot.set_data(obj_p)  
+                        full_frame_plot.set_data(full_object_p)
                     
                     plt.pause(0.1) # Pause to allow plotting
             
             if not abort_script:
                 # Save object and brightfield
-                full_object -= np.min(full_object)
-                full_object /= np.max(full_object) # Convert to 0-1
-                full_object = (full_object * 255).astype(np.uint8) # Convert to 0-255 and uint8
-                name = 'magnitude.png' if options['plot_magnitude'] else 'phase.png'
-                Image.fromarray(full_object).save(os.path.join(results_folder,name))
+                full_object_m -= np.min(full_object_m)
+                full_object_m /= np.max(full_object_m) # Convert to 0-1
+                full_object_m = (full_object_m * 255).astype(np.uint8) # Convert to 0-255 and uint8
+                Image.fromarray(full_object_m).save(os.path.join(results_folder,'magnitude.png'))
+                
+                full_object_p -= np.min(full_object_p)
+                full_object_p /= np.max(full_object_p) # Convert to 0-1
+                full_object_p = (full_object_p * 255).astype(np.uint8) # Convert to 0-255 and uint8
+                Image.fromarray(full_object_p).save(os.path.join(results_folder,'phase.png'))
                 
                 brightfield -= np.min(brightfield)
                 brightfield /= np.max(brightfield) # Convert to 0-1

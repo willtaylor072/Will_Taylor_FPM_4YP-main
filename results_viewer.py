@@ -12,7 +12,7 @@ import numpy as np
 
 # Folders
 # results_folder = 'results/library/talia_full_frame_2' 
-results_folder = 'results/library/zea_seed'
+results_folder = 'results/library/talia_ff_new'
 
 # Select the reconstructions we have 
 have_magnitude = True

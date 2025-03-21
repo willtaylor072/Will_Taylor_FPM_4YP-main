@@ -29,10 +29,8 @@ exposure 500ms and green light
 With 4x magnification system increase exposure slightly 
 
 usaf_v3_NEW
-600ms green, 4x magnification, 50mm LED2SAMPLE
-
-usaf_v3_NEW_2
-800ms exposure
+800ms green, 4x magnification, 50mm LED2SAMPLE
+Seems underexposed... Perhaps use white
 
 diamond samples:
 600ms green, 4x magnification, 50mm LED2SAMPLE
