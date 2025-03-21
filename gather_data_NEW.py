@@ -28,8 +28,8 @@ grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only 
 num_images = grid_size**2
 brightfield_preview = True # Preview bright or darkfield
 preview_exposure = int(60e3) if brightfield_preview else int(500e3) # In microseconds for preview
-fpm_exposure = int(800e3)  # In microseconds for FPM image capture, 300-600ms
-led_color = 'green' # Illumination color
+fpm_exposure = int(600e3)  # In microseconds for FPM image capture, 300-600ms
+led_color = 'white' # Illumination color
 x_coords,y_coords = fpm.LED_spiral(grid_size,x_offset=1,y_offset=0) # LED sequence (ensure first LED is aligned with optical axis)
 
 crop_start_x = int(1456/2 - img_size/2) # For preview
