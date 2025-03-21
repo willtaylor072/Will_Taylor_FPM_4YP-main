@@ -11,7 +11,7 @@ import numpy as np
 ##########################################################################################################
 
 # Folders
-results_folder = 'results/library/talia_full_frame'
+results_folder = 'results/library/talia_full_frame_green'
 
 # Select the reconstructions we have 
 have_magnitude = True
