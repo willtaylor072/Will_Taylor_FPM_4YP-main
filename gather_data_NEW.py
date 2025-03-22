@@ -26,12 +26,18 @@ img_size = 300 # Small image size (for preview)
 
 grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
 num_images = grid_size**2
+fpm_exposure = int(600e3)  # In microseconds for FPM image capture, 600ms
+led_color = 'white' # Illumination color, white (or green with ~1000ms exposure)
+
+# Use different exposure time in darkfield
+df_exposure_on = True 
+df_start = 20 # Image number of first darkfield, 20 for 60mm LED2SAMPLE
+df_exposure = int(1500e3) 
+
+# Misc
 brightfield_preview = True # Preview bright or darkfield
 preview_exposure = int(60e3) if brightfield_preview else int(500e3) # In microseconds for preview
-fpm_exposure = int(1200e3)  # In microseconds for FPM image capture, 600ms
-led_color = 'green' # Illumination color, white (or green with ~1000ms exposure)
 x_coords,y_coords = fpm.LED_spiral(grid_size,x_offset=1,y_offset=0) # LED sequence (ensure first LED is aligned with optical axis)
-
 crop_start_x = int(1456/2 - img_size/2) # For preview
 crop_start_y = int(1088/2 - img_size/2)
 
@@ -177,10 +183,9 @@ elif continue_script:
     # Start taking images now that sample is aligned
 
     # Take a brightfield image (or darkfield if chosen)
-    brightfield = camera.capture_array()
+    brightfield = camera.capture_array() # uint8 RGB numpy array
     brightfield_pil = Image.fromarray(brightfield).convert('L') # Grayscale pillow image
     brightfield_pil.save(os.path.join(data_folder,'brightfield.png'), format='PNG') # Save as png
-    brightfield = np.array(brightfield_pil) # Keep as array
 
     # Define the data grid (single large grayscale image for visualization)
     downsampled_size = img_size // 15  # Each image should be this small
@@ -203,23 +208,25 @@ elif continue_script:
     plt.pause(0.1)  
 
     # Take FPM images
-    images = np.zeros((1088, 1456, num_images), dtype=np.uint8)
     camera.set_controls({"ExposureTime": fpm_exposure})
 
     for i in range(num_images):
         if abort_script:
             print('Script aborted...')
             break
+        
         led_matrix.show_pixel(x_coords[i], y_coords[i], brightness=1, color=led_color)
         if i == 0:
             time.sleep(0.5)  # Only need on first iteration 
-        image = camera.capture_array()
+        
+        # Different darkfield exposure time
+        if i == df_start and df_exposure_on:
+            camera.set_controls({'ExposureTime': df_exposure})
+            
+        image = camera.capture_array() # uint8 RGB numpy array
         image_pil = Image.fromarray(image).convert('L') # Grayscale pillow image
         img_path = os.path.join(data_folder, f'image_{i}.png') # Create path name
         image_pil.save(img_path, format='PNG') # Save as png 
-        
-        image = np.array(image_pil) # Convert to array for reconstruction
-        images[:,:,i] = image # Insert into images array
         
         # Downsample image for the data grid
         downsampled = np.array(image_pil.resize((downsampled_size, downsampled_size)))
@@ -238,7 +245,7 @@ elif continue_script:
 
         # Status message
         progress = int((i+1)/num_images * 100)
-        sys.stdout.write(f'\r Image Gathering Progress: {progress}%') # Write to same line
+        sys.stdout.write(f'\r Image Gathering Progress: {progress}%... ') # Write to same line
         sys.stdout.flush()
 
     if not abort_script:
