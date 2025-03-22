@@ -25,15 +25,19 @@ options = {
     'plot_mode': 1 for .py, 3 for .ipynb
     'LED_correction': 0, # 0, off; 1, accurate; 2, fast; 3, first iteration only
     'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE
-    'momentum': False, # Use momentum on alpha and beta (tuned for ePIE only)
-    'intensity_correction': False, # Adjust image intensity to account for LED variation
+    'momentum': True, # Use momentum on alpha and beta (tuned for ePIE only)
+    'intensity_correction': True, # Adjust image intensity to account for LED variation
 }
 
 PIE is slowest, typically I use ePIE. If stability is required (e.g. poor data) use rPIE.
 alpha = beta = 1 seems to usually work.
 
-
 KEY FINDINGS AND CONSIDERATIONS
+
+**EXPOSURE TIME 600ms, WHITE LED LIGHT**
+**60-70% overlap (50-70mm LED2SAMPLE)** 
+60% (actual 47mm) for USAF with specified distance 50mm
+65% (actual 60mm) for talia with specified distance 70mm
 
 Central LED (first LED in sequence) should be close to optical axis. If it is not directly aligned with
 the optical axis (i.e. vertically through aperture of objective) then we need to use x_offset and y_offset
@@ -49,19 +53,10 @@ Momentum may be used to speed up recovery process.
 The hole under the sample should be taped to 1.25x1.67mm to match the camera FOV and not let any unecessary light into the system from the 
 LEDs.
 
-Squiggly artefacts in reconstructed images are very sensitive to input wavevectors -> i.e. LED to sample distance and initial LED position
-
-**EXPOSURE TIME 600ms, WHITE LED LIGHT**
-**60-70% overlap (50-70mm LED2SAMPLE)** 60% for USAF worked well, 70% for natural samples
+Squiggly artefacts in reconstructed images are very sensitive to input wavevectors -> i.e. LED to sample distance and initial LED position, and also require cropping the edge NA images to fix
 
 Also larger LED to sample distance might be useful for natural samples, to provide more redundant data in reconstruction
 For the USAF target we used the shortest LED to sample distance to include the highest frequency spacial information and get the best resolution, but natural samples might need a larger brightfield region to reconstruct effectively
-
-Green LED light (550nm) worked well - didn't require much adjustment to exposure (just a slight increase of say 100ms)
-Objective is corrected for 550nm spherical aberrations, so may reduce noise in darkfield (not extensively tested)
-
-Main aberrations are spherical (and usually some defocus)
-Nominal upsampling ratio of 5 is usually good
 
 Data gathering time for 15x15 with 0.3-0.5s exposue ~ 90-120s
 Reconstruction time for 300x300 greyscale image with 8 iterations using ePIE and no LED correction ~ 70s (for raspberry pi 5 8Gb)
