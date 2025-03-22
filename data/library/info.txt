@@ -13,7 +13,6 @@ options = {
 Full frame datasets are 60MB
 300x300 datasets are 3MB
 
-
 cardiac_muscle, lilium_anther, rectum, saliva, talia_stem, zea_root all taken with LED2SAMPLE = 50mm
 talia_stem_2 has LED2SAMPLE = 71mm
 pixel size = 3450/3 = 1150um
@@ -40,6 +39,8 @@ diamond_2 is the ~2um center to center lines
 diamond_3 is the ~1.5um center to center lines
 diamond_4 is dots of decreasing separation, 1um, 0.75um, 0.5, 0.5, 0.75, 0.75
 
-talia_full_frame - 70mm LED2SAMPLE, 600ms white
-talia_full_frame_green - 1200ms green
-talia_ff_hybrid - 600ms bf then 1500ms df white
+With 60mm LED2SAMPLE
+talia_full_frame - 600ms white, BEST, keep
+talia_full_frame_green - 1200ms green, OKAY
+talia_ff_hybrid - 600ms bf then 1500ms df both white, BAD
+

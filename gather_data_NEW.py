@@ -27,7 +27,7 @@ img_size = 300 # Small image size (for preview)
 grid_size = 15 # Entire LED array is 16x16 but due to misalignment we will only use 15x15
 num_images = grid_size**2
 fpm_exposure = int(600e3)  # In microseconds for FPM image capture, 600ms
-led_color = 'white' # Illumination color, white (or green with ~1000ms exposure)
+led_color = 'white' # Illumination color, white is best (green possible with longer exposure)
 
 # Use different exposure time in darkfield
 df_exposure_on = True 

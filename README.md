@@ -51,7 +51,8 @@ LEDs.
 
 Squiggly artefacts in reconstructed images are very sensitive to input wavevectors -> i.e. LED to sample distance and initial LED position
 
-Exposure time of 0.5s is good for USAF for white light
+**EXPOSURE TIME 600ms, WHITE LED LIGHT**
+**60-70% overlap (50-70mm LED2SAMPLE)** 60% for USAF worked well, 70% for natural samples
 
 Also larger LED to sample distance might be useful for natural samples, to provide more redundant data in reconstruction
 For the USAF target we used the shortest LED to sample distance to include the highest frequency spacial information and get the best resolution, but natural samples might need a larger brightfield region to reconstruct effectively

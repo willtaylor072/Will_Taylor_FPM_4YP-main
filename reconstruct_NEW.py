@@ -17,17 +17,17 @@ importlib.reload(fpm) # Reload
 # TODO
 
 # Specify folders for data and results
-data_folder = 'data/library/talia_full_frame_green' # Get data from here
+data_folder = 'data/library/talia_ff_hybrid' # Get data from here
 results_folder = 'results/recent' # Save results here
 
 # Setup
-full_reconstruction = True # Select mode
+full_reconstruction = False # Select mode
 remove_edge_NA = True # Remove images on edge of brightfield
 edge_NA = [9,10,11,12,13,16,17,18,19] # Images in the dataset which are half brightfield half darkfield 
 grid_size = 15 # Can decrease to speed up process (but lower resolution)
 
 # Specify optical system parameters
-LED2SAMPLE = 72 # Measure, then perhaps add 5mm
+LED2SAMPLE = 75 # Measure, then perhaps add 5mm
 x_initial = 0.9 # Should not need changing
 y_initial = -0.5 # Ditto
 LED_P = 3.3 # Ditto
@@ -69,7 +69,7 @@ num_images = grid_size**2
 full_images = np.zeros((y_lim,x_lim,num_images)) 
 for i in range(num_images): 
     filename = os.path.join(data_folder, f'image_{i}.png') # Construct path
-    img = np.array(Image.open(filename),dtype=np.uint8) # Open image as numpy array
+    img = np.array(Image.open(filename),dtype=np.float64) # Open image as numpy array
     full_images[:,:,i] = img
 
 ###### UI FUNCTIONS ########
