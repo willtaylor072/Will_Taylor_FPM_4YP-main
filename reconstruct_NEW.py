@@ -17,7 +17,7 @@ importlib.reload(fpm) # Reload
 # TODO
 
 # Specify folders for data and results
-data_folder = 'data/library/talia_full_frame' # Get data from here
+data_folder = 'data/library/talia_full_frame_dual' # Get data from here
 results_folder = 'results/recent' # Save results here
 
 # Setup
@@ -43,7 +43,7 @@ options = {
     'alpha': 1, # Regularisation parameter for object update
     'beta': 1, # Regularisation parameter for pupil update
     'LED_correction': 0, # 0, off; 1, accurate; 2, fast; 3, first iteration only
-    'update_method': 3, # 1, PIE; 2, ePIE; 3, rPIE. Update method, ePIE reccomended
+    'update_method': 2, # 1, PIE; 2, ePIE; 3, rPIE. Update method, ePIE reccomended
     'momentum': True, # Use momentum on alpha and beta (tuned for ePIE only)
     'intensity_correction': True, # Adjust image intensity to account for LED variation
 }
